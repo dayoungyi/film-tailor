@@ -60,7 +60,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
       <button class="btn-add" id="addBtn">＋ 부재 추가</button>
       <button class="btn-save" id="saveBtn">▣ 치수내역 저장</button>
     </div>
-    <div class="note">가로/세로는 실제 재단할 부재 치수입니다. 부재는 90도 회전해서 배치할 수 있습니다.</div>
+    <div class="note">가로/세로는 실제 재단할 부재 치수입니다. 무늬·나뭇결 방향을 고려하여 입력한 가로 × 세로 방향 그대로 배치합니다.</div>
   </div>
 
   <div class="card actions">
@@ -294,9 +294,9 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
       for(const it of order){
         let chosen=null;
 
-        const orientations = it.w===it.h
-          ? [[it.w,it.h,0]]
-          : [[it.w,it.h,0],[it.h,it.w,1]];
+        // 필름에 무늬/나뭇결이 있는 경우를 고려하여 회전하지 않습니다.
+        // 입력한 가로 × 세로 방향을 그대로 유지합니다.
+        const orientations = [[it.w,it.h,0]];
 
         for(const fr of free){
           for(const [pw,ph,rot] of orientations){
@@ -464,7 +464,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     const partArea=result.area;
     const util=materialArea?partArea/materialArea*100:0;
     const waste=100-util;
-    $('summary').textContent=`필름: ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm | 사용 길이: ${Math.ceil(used).toLocaleString()} mm | 남은 길이: ${Math.max(0,Math.floor(remain)).toLocaleString()} mm | 부재 ${items.length}개 | 최소 로스 우선 | 재단면적 활용률: ${util.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
+    $('summary').textContent=`필름: ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm | 사용 길이: ${Math.ceil(used).toLocaleString()} mm | 남은 길이: ${Math.max(0,Math.floor(remain)).toLocaleString()} mm | 부재 ${items.length}개 | 최소 로스 우선 · 결 방향 유지 | 재단면적 활용률: ${util.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
     render(result,filmW,filmL);
     lastResult=lastResult||{};
     lastResult.items=items;
