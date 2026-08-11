@@ -392,7 +392,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     const totalY=topH+filmL*scale;
     const remain=Math.max(0,filmL-used);
 
-    body += `<rect x="0" y="0" width="${rollW.toFixed(2)}" height="${rollH.toFixed(2)}"
+    body += `<rect x="0" y="${topH}" width="${rollW.toFixed(2)}" height="${rollH.toFixed(2)}"
                     fill="#fff" stroke="#222" stroke-width="2"/>`;
 
     for(const p of result.placed){
@@ -412,7 +412,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     }
 
     // Boundary of the actual material used and the unused tail.
-    body += `<line x1="0" y1="${(usedY-topH).toFixed(2)}" x2="${rollW.toFixed(2)}" y2="${(usedY-topH).toFixed(2)}"
+    body += `<line x1="0" y1="${usedY.toFixed(2)}" x2="${rollW.toFixed(2)}" y2="${usedY.toFixed(2)}"
                     stroke="#d97706" stroke-width="2" stroke-dasharray="8 6"/>`;
 
     const svg=`<svg id="resultSvg" xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">
