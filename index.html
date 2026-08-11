@@ -110,19 +110,19 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     });
     return items;
   }
-  // Permanent storage key: future versions keep using this key so
-  // replacing index.html on GitHub Pages does not erase saved measurements.
+  // Permanent storage. This key never changes between versions.
   const STORAGE_KEY='filmTailorSavedData';
   const LEGACY_KEYS=[
     'filmTailorV12','filmTailorV11','filmTailorV10','filmTailorV9',
     'filmTailorV8','filmTailorV7','filmTailorV6','filmTailorV5',
-    'filmTailorV4','filmTailorV3','filmTailor','filmTailorBackup'
+    'filmTailorV4','filmTailorV3','filmTailor','filmTailorBackup',
+    'filmTailorSavedBackup'
   ];
   let loading=false;
 
   function collectData(){
     return {
-      version:15,
+      version:16,
       savedAt:Date.now(),
       filmW:$('filmW').value || '1220',
       filmL:$('filmL').value || '50000',
@@ -138,7 +138,6 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   function writeStorage(data){
     const raw=JSON.stringify(data);
     try{ localStorage.setItem(STORAGE_KEY,raw); }catch(e){}
-    // Keep a second local backup under a different key.
     try{ localStorage.setItem('filmTailorSavedBackup',raw); }catch(e){}
   }
 
@@ -148,32 +147,47 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   }
 
   function readSavedData(){
-    const keys=[STORAGE_KEY,'filmTailorSavedBackup',...LEGACY_KEYS];
     const candidates=[];
+    const keys=[STORAGE_KEY,'filmTailorSavedBackup',...LEGACY_KEYS];
+    const seen=new Set();
+
     for(const key of keys){
+      if(seen.has(key)) continue;
+      seen.add(key);
       try{
         const raw=localStorage.getItem(key);
         if(!raw) continue;
         const d=JSON.parse(raw);
-        if(d && Array.isArray(d.rows)){
-          candidates.push(d);
-        }
+        if(!d || !Array.isArray(d.rows)) continue;
+
+        // Prefer the copy containing the most user-entered rows.
+        // This prevents a newly-created default row from replacing
+        // an older 30~40-row measurement list.
+        const validRows=d.rows.filter(x =>
+          x && (String(x.name||'').trim() || Number(x.w)>0 || Number(x.h)>0)
+        );
+        candidates.push({
+          ...d,
+          rows:d.rows,
+          _rowCount:validRows.length,
+          _savedAt:Number(d.savedAt)||0
+        });
       }catch(e){}
     }
-    if(!candidates.length) return null;
 
-    // Prefer the newest valid copy. This prevents a newer empty/default
-    // record from overwriting an older record that still has the user's rows.
-    candidates.sort((a,b)=>(Number(b.savedAt)||0)-(Number(a.savedAt)||0));
+    if(!candidates.length) return null;
+    candidates.sort((a,b)=>
+      b._rowCount-a._rowCount || b._savedAt-a._savedAt
+    );
     return candidates[0];
   }
 
-  function makeRow(data){
+  function makeSavedRow(x){
     const r=document.createElement('div'); r.className='row';
-    r.innerHTML=`<input class="name" placeholder="부재명" value="${esc(data.name||'')}">
-      <input class="w" type="number" min="1" placeholder="가로" value="${data.w||''}">
-      <input class="h" type="number" min="1" placeholder="세로" value="${data.h||''}">
-      <input class="qty" type="number" min="1" value="${data.qty||1}">
+    r.innerHTML=`<input class="name" placeholder="부재명" value="${esc(x.name||'')}">
+      <input class="w" type="number" min="1" placeholder="가로" value="${x.w||''}">
+      <input class="h" type="number" min="1" placeholder="세로" value="${x.h||''}">
+      <input class="qty" type="number" min="1" value="${x.qty||1}">
       <button class="btn-x" type="button">×</button>`;
     r.querySelector('.btn-x').onclick=()=>{r.remove();saveLocal();};
     r.querySelectorAll('input').forEach(i=>i.addEventListener('input',saveLocal));
@@ -185,24 +199,24 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     const d=readSavedData();
     rowsEl.innerHTML='';
 
-    if(d && d.rows.length){
+    if(d){
       $('filmW').value=d.filmW||1220;
       $('filmL').value=d.filmL||50000;
-      d.rows.forEach(x=>rowsEl.appendChild(makeRow(x)));
+      d.rows.forEach(x=>rowsEl.appendChild(makeSavedRow(x)));
 
-      // Immediately migrate old data to the permanent key.
       loading=false;
+      // Migrate the best existing copy to the permanent key.
       writeStorage(collectData());
       return;
     }
 
-    // No saved data at all: start with one blank/default row.
     $('filmW').value='1220';
     $('filmL').value='50000';
-    rowsEl.appendChild(makeRow({name:'문짝',w:850,h:2000,qty:1}));
+    rowsEl.appendChild(makeSavedRow({name:'문짝',w:850,h:2000,qty:1}));
     loading=false;
     saveLocal();
   }
+
 
   // MaxRects-like heuristic: keep free rectangles and choose the placement
   // that minimizes resulting short-axis waste, then long-axis waste.
@@ -421,6 +435,26 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     $('svgHost').style.width=pxW+'px';
     $('svgHost').style.height=(pxH+4)+'px';
     lastResult={svg:document.getElementById('resultSvg'),used,filmW,filmL,result};
+  }
+
+  function calculate(){
+    saveLocal();
+    const filmW=+$('filmW').value, filmL=+$('filmL').value, items=getItems();
+    if(!(filmW>0&&filmL>0)){alert('필름 폭과 길이를 입력해주세요.');return;}
+    if(!items.length){alert('부재를 하나 이상 입력해주세요.');return;}
+    const impossible=items.find(i=>Math.min(i.w,i.h)>filmW);
+    if(impossible){alert(`필름 폭 ${filmW}mm에 들어가지 않는 부재가 있습니다: ${impossible.name} (${impossible.w}×${impossible.h})`);return;}
+    const result=pack(items,filmW,filmL);
+    if(!result){alert('배치 계산에 실패했습니다.');return;}
+    const used=result.maxY, remain=Math.max(0,filmL-used);
+    const materialArea=used*filmW;
+    const partArea=result.area;
+    const util=materialArea?partArea/materialArea*100:0;
+    const waste=100-util;
+    $('summary').textContent=`필름: ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm | 사용 길이: ${Math.ceil(used).toLocaleString()} mm | 남은 길이: ${Math.max(0,Math.floor(remain)).toLocaleString()} mm | 부재 ${items.length}개 | 최소 로스 우선 | 재단면적 활용률: ${util.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
+    render(result,filmW,filmL);
+    lastResult=lastResult||{};
+    lastResult.items=items;
   }
 
   function saveCSV(){
