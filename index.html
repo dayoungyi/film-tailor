@@ -6,63 +6,93 @@
 <meta name="theme-color" content="#111827">
 <title>필름 재단 배치 계산기</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f5f7;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif}
-.app{max-width:1100px;margin:auto;padding:18px 14px 40px}.head{margin-bottom:14px}.head h1{font-size:24px;margin:0 0 5px}.head p{margin:0;color:#6b7280;font-size:14px}
-.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px #00000008}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.field label{display:block;font-size:12px;color:#6b7280;margin-bottom:5px}.field input{width:100%;padding:11px 10px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
-.rowhead,.piece{display:grid;grid-template-columns:1.4fr 1fr 1fr .65fr 42px;gap:7px;align-items:center}.rowhead{font-size:12px;color:#6b7280;padding:0 4px 6px}.piece{margin-bottom:7px}.piece input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:9px;font-size:15px}.del{border:0;background:#f3f4f6;border-radius:9px;height:40px;font-size:18px}
-.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:11px;padding:12px 15px;font-weight:700;font-size:15px;background:#111827;color:white}.btn.secondary{background:#eef0f3;color:#111827}.btn.green{background:#166534}.result{font-weight:700;font-size:15px;margin-bottom:10px;line-height:1.5}.canvaswrap{overflow:auto;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;padding:10px;text-align:center}.canvaswrap canvas{max-width:100%;height:auto;background:white;display:block;margin:0 auto}
-.empty{text-align:center;color:#9ca3af;padding:20px}.hint{font-size:12px;color:#6b7280;margin-top:8px;line-height:1.5}
-@media(max-width:650px){.app{padding:14px 10px}.head h1{font-size:21px}.grid{grid-template-columns:1fr 1fr}.rowhead,.piece{grid-template-columns:1.35fr 1fr 1fr .65fr 38px}.piece input{font-size:14px;padding:9px 7px}.btn{flex:1;min-width:130px}}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f5f7;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif}
+.app{max-width:1100px;margin:auto;padding:18px 14px 40px}
+.head{margin-bottom:14px}.head h1{font-size:24px;margin:0 0 5px}.head p{margin:0;color:#6b7280;font-size:14px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px #00000008}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:520px}
+.field label{display:block;font-size:12px;color:#6b7280;margin-bottom:5px}
+.field input{width:100%;padding:11px 10px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+.rowhead,.piece{display:grid;grid-template-columns:1.4fr 1fr 1fr .65fr 42px;gap:7px;align-items:center}
+.rowhead{font-size:12px;color:#6b7280;padding:0 4px 6px}.piece{margin-bottom:7px}
+.piece input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:9px;font-size:15px}
+.del{border:0;background:#f3f4f6;border-radius:9px;height:40px;font-size:18px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:11px;padding:12px 15px;font-weight:700;font-size:15px;background:#111827;color:#fff}
+.btn.secondary{background:#eef0f3;color:#111827}.btn.green{background:#166534}
+.result{font-weight:700;font-size:15px;margin-bottom:10px;line-height:1.5}
+.viewer-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.zoom-label{font-size:13px;color:#4b5563;font-weight:700}.zoom-btn{border:1px solid #d1d5db;background:#fff;border-radius:9px;padding:8px 11px;font-weight:700}
+.canvaswrap{height:min(78vh,900px);min-height:420px;overflow:auto;border-radius:12px;background:#eef1f5;border:1px solid #e5e7eb;padding:16px;text-align:center;-webkit-overflow-scrolling:touch}
+#svgHost{display:inline-block;text-align:left;vertical-align:top;background:#fff;box-shadow:0 1px 4px #0001}
+#layoutSvg{display:block;background:#fff}
+.hint{font-size:12px;color:#6b7280;margin-top:8px;line-height:1.5}
+@media(max-width:650px){
+ .app{padding:14px 10px}.head h1{font-size:21px}.rowhead,.piece{grid-template-columns:1.35fr 1fr 1fr .65fr 38px}
+ .piece input{font-size:14px;padding:9px 7px}.btn{flex:1;min-width:130px}
+ .canvaswrap{height:72vh;min-height:380px;padding:10px}
+}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="head"><h1>필름 재단 배치 계산기</h1><p>필름 폭과 길이를 입력하고 실측값을 넣으면 필름 위에 자동으로 배치합니다.</p></div>
+<div class="head"><h1>필름 재단 배치 계산기</h1><p>필름 폭과 길이를 입력하고 실측값을 넣으면 필름 위에 자동으로 배치합니다.</p></div>
 
-  <div class="card">
-    <div class="grid" style="grid-template-columns:1fr 1fr;max-width:520px">
-      <div class="field"><label>필름 폭 (mm)</label><input id="stock" type="number" inputmode="decimal" value="1220"></div>
-      <div class="field"><label>필름 길이 (mm)</label><input id="rollLength" type="number" inputmode="decimal" value="10000"></div>
-    </div>
-  </div>
+<div class="card">
+ <div class="grid">
+  <div class="field"><label>필름 폭 (mm)</label><input id="stock" type="number" inputmode="decimal" value="1220"></div>
+  <div class="field"><label>필름 길이 (mm)</label><input id="rollLength" type="number" inputmode="decimal" value="50000"></div>
+ </div>
+ <div class="hint" id="rollInfo"></div>
+</div>
 
-  <div class="card">
-    <div class="rowhead"><div>부재명</div><div>가로(mm)</div><div>세로(mm)</div><div>수량</div><div></div></div>
-    <div id="pieces"></div>
-    <div class="actions"><button class="btn secondary" id="add">＋ 부재 추가</button></div>
-    <div class="hint">가로/세로는 실제 재단할 부재의 치수를 입력하세요.</div>
-  </div>
+<div class="card">
+ <div class="rowhead"><div>부재명</div><div>가로(mm)</div><div>세로(mm)</div><div>수량</div><div></div></div>
+ <div id="pieces"></div>
+ <div class="actions"><button class="btn secondary" id="add">＋ 부재 추가</button></div>
+ <div class="hint">가로/세로는 실제 재단할 부재의 치수를 입력하세요. 별도 여유값은 적용하지 않습니다.</div>
+</div>
 
-  <div class="card">
-    <div class="actions">
-      <button class="btn" id="calc">★ 재단 배치 계산</button>
-      <button class="btn green" id="save">배치도 이미지 저장</button>
-      <button class="btn secondary" id="clear">전체 삭제</button>
-    </div>
-  </div>
+<div class="card">
+ <div class="actions">
+  <button class="btn" id="calc">★ 재단 배치 계산</button>
+  <button class="btn green" id="save">JPEG 이미지 저장</button>
+  <button class="btn secondary" id="clear">전체 삭제</button>
+ </div>
+</div>
 
-  <div class="card">
-    <div class="result" id="result">부재를 입력하고 배치 계산을 눌러주세요.</div>
-    <div class="canvaswrap"><canvas id="canvas" width="900" height="600"></canvas></div>
-  </div>
+<div class="card">
+ <div class="viewer-toolbar">
+  <button class="zoom-btn" id="fit">맞춤</button>
+  <button class="zoom-btn" id="minus">−</button>
+  <span class="zoom-label" id="zoomText">100%</span>
+  <button class="zoom-btn" id="plus">＋</button>
+  <span class="zoom-label">※ 50m도 세로로 길게 확대되어 스크롤해서 확인합니다.</span>
+ </div>
+ <div class="result" id="result">부재를 입력하고 배치 계산을 눌러주세요.</div>
+ <div class="canvaswrap" id="viewer"><div id="svgHost"></div></div>
+</div>
 </div>
 
 <script>
-const piecesEl=document.getElementById('pieces'), canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
-let placed=[], rollLen=0;
+const piecesEl=document.getElementById('pieces');
+const svgHost=document.getElementById('svgHost');
+const viewer=document.getElementById('viewer');
+const resultEl=document.getElementById('result');
+const zoomText=document.getElementById('zoomText');
+let placed=[], rollLen=0, zoom=1, baseScale=0.45;
 
 function addPiece(name='',w='',h='',q=1){
- const d=document.createElement('div'); d.className='piece';
+ const d=document.createElement('div');d.className='piece';
  d.innerHTML=`<input class="pn" placeholder="예: 문짝" value="${name}">
  <input class="pw" type="number" inputmode="decimal" placeholder="450" value="${w}">
  <input class="ph" type="number" inputmode="decimal" placeholder="720" value="${h}">
  <input class="pq" type="number" inputmode="numeric" min="1" value="${q}">
  <button class="del" aria-label="삭제">×</button>`;
- d.querySelector('.del').onclick=()=>d.remove(); piecesEl.appendChild(d);
+ d.querySelector('.del').onclick=()=>d.remove();piecesEl.appendChild(d);
 }
 document.getElementById('add').onclick=()=>addPiece();
-addPiece('문짝','450','720',2);
+addPiece('문짝','450','2000',2);
 
 function getPieces(){
  return [...document.querySelectorAll('.piece')].map(x=>({
@@ -70,126 +100,159 @@ function getPieces(){
   w:+x.querySelector('.pw').value,h:+x.querySelector('.ph').value,q:+x.querySelector('.pq').value
  })).filter(x=>x.w>0&&x.h>0&&x.q>0);
 }
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function mm(v){return Math.round(v).toLocaleString('ko-KR');}
 
 function calc(){
  const stock=+document.getElementById('stock').value, rollLength=+document.getElementById('rollLength').value;
- const margin=0, heat=0, gap=0;
  if(!(stock>0)||!(rollLength>0)){alert('필름 폭과 필름 길이를 확인하세요.');return}
+ const pieces=getPieces();if(!pieces.length){alert('부재를 하나 이상 입력하세요.');return}
  let items=[];
- getPieces().forEach(p=>{for(let i=0;i<p.q;i++)items.push({name:p.name,w:p.w+2*margin+heat,h:p.h+2*margin+heat,ow:p.w,oh:p.h,idx:i+1,total:p.q})});
- if(!items.length){alert('부재를 하나 이상 입력하세요.');return}
+ pieces.forEach(p=>{for(let i=0;i<p.q;i++)items.push({name:p.name,w:p.w,h:p.h,idx:i+1,total:p.q})});
  items.sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h));
- let rows=[], out=[];
+ let rows=[],out=[];
  for(const it of items){
-   let best=null;
+  let best=null;
+  for(const rot of [false,true]){
+   const w=rot?it.h:it.w,h=rot?it.w:it.h;
+   if(w>stock)continue;
+   rows.forEach((r,ri)=>{
+    if(h<=r.h && r.x+w<=stock){
+     const score=(r.h-h)+(stock-(r.x+w))*0.01;
+     if(!best||score<best.score)best={score,ri,w,h,rot};
+    }
+   });
+  }
+  if(best){
+   const r=rows[best.ri];
+   out.push({...it,x:r.x,y:r.y,w:best.w,h:best.h,rot:best.rot});
+   r.x+=best.w;
+  }else{
+   let opts=[];
    for(const rot of [false,true]){
-     const w=rot?it.h:it.w, h=rot?it.w:it.h;
-     if(w>stock)continue;
-     rows.forEach((r,ri)=>{
-       if(h<=r.h && r.x+w<=stock){
-         const score=(r.h-h)+(stock-(r.x+w))*0.01;
-         if(!best||score<best.score)best={score,ri,w,h,rot};
-       }
-     });
+    const w=rot?it.h:it.w,h=rot?it.w:it.h;
+    if(w<=stock)opts.push({w,h,rot});
    }
-   if(best){
-     const r=rows[best.ri]; out.push({...it,x:r.x,y:r.y,w:best.w,h:best.h,rot:best.rot}); r.x+=best.w+gap;
-   }else{
-     let opts=[];
-     for(const rot of [false,true]){const w=rot?it.h:it.w,h=rot?it.w:it.h;if(w<=stock)opts.push({w,h,rot})}
-     if(!opts.length){alert(it.name+'의 여유 포함 폭이 필름 폭을 초과합니다.');return}
-     opts.sort((a,b)=>a.h-b.h); const o=opts[0], y=rows.reduce((s,r)=>s+r.h+gap,0);
-     rows.push({y,h:o.h,x:o.w+gap}); out.push({...it,x:0,y,w:o.w,h:o.h,rot:o.rot});
-   }
+   if(!opts.length){alert(`${it.name} (${it.w}×${it.h})는 필름 폭 ${stock}mm보다 큽니다.`);return}
+   opts.sort((a,b)=>a.h-b.h);
+   const o=opts[0], y=rows.reduce((s,r)=>s+r.h,0);
+   rows.push({y,h:o.h,x:o.w});
+   out.push({...it,x:0,y,w:o.w,h:o.h,rot:o.rot});
+  }
  }
- placed=out; rollLen=rollLength;
  const usedLen=Math.max(...out.map(p=>p.y+p.h));
  if(usedLen>rollLength){
-   alert(`입력한 필름 길이 ${Math.round(rollLength)}mm보다 재단 배치에 필요한 길이 ${Math.round(usedLen)}mm가 더 깁니다.\\n필름 길이를 늘려주세요.`);
-   return;
+  alert(`입력한 필름 길이 ${mm(rollLength)}mm보다 필요한 길이 ${mm(usedLen)}mm가 더 깁니다.`);
+  return;
  }
- const area=out.reduce((s,p)=>s+p.w*p.h,0), eff=100*area/(stock*rollLen);
- document.getElementById('result').textContent=`필름: ${stock} × ${Math.round(rollLength)} mm  |  사용 길이: ${Math.round(Math.max(...out.map(p=>p.y+p.h)))} mm  |  남은 길이: ${Math.round(rollLength-Math.max(...out.map(p=>p.y+p.h)))} mm  |  부재 ${out.length}개`;
- draw();
+ placed=out;rollLen=rollLength;
+ const remain=rollLength-usedLen;
+ resultEl.textContent=`필름: ${mm(stock)} × ${mm(rollLength)} mm  |  사용 길이: ${mm(usedLen)} mm  |  남은 길이: ${mm(remain)} mm  |  부재 ${out.length}개`;
+ document.getElementById('rollInfo').textContent=`필름 전체 길이: ${mm(rollLength)} mm (${(rollLength/1000).toFixed(1)} m)`;
+ setFitZoom();draw();
+}
+
+function labelLines(p){
+ const dim=`${mm(p.w)} × ${mm(p.h)}`;
+ return [p.name,dim];
 }
 
 function draw(){
  const stock=+document.getElementById('stock').value||1220;
- const len=Math.max(+(document.getElementById('rollLength').value)||10000,500);
- const maxW=Math.min(980,Math.max(340,window.innerWidth-45)), maxH=760;
- const s=Math.min((maxW-90)/stock,(maxH-100)/len);
- const W=Math.max(340,Math.round(stock*s+90)), H=Math.max(320,Math.round(len*s+100));
- canvas.width=W; canvas.height=H;
- ctx.clearRect(0,0,W,H);
+ const len=Math.max(+(document.getElementById('rollLength').value)||50000,500);
+ const scale=baseScale*zoom;
+ const left=65,top=55,right=150,bottom=55;
+ const filmW=stock*scale, filmH=len*scale;
+ const W=Math.ceil(left+filmW+right),H=Math.ceil(top+filmH+bottom);
+ let s=`<svg id="layoutSvg" xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+ <rect width="100%" height="100%" fill="#fff"/>
+ <text x="${left+filmW/2}" y="24" text-anchor="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="16" font-weight="700" fill="#333">필름 폭 ${mm(stock)} mm</text>
+ <line x1="${left}" y1="38" x2="${left+filmW}" y2="38" stroke="#555"/>
+ <polygon points="${left},38 ${left+8},34 ${left+8},42" fill="#555"/><polygon points="${left+filmW},38 ${left+filmW-8},34 ${left+filmW-8},42" fill="#555"/>
+ <rect x="${left}" y="${top}" width="${filmW}" height="${filmH}" fill="#fff" stroke="#222" stroke-width="2"/>`;
 
- const ox=45, oy=35, filmW=stock*s, filmH=len*s;
- ctx.fillStyle='#fff'; ctx.fillRect(ox,oy,filmW,filmH);
- ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.strokeRect(ox,oy,filmW,filmH);
+ const fills=['#e5f3ff','#fff1c7','#e8f5e9','#f0e8ff','#ffe8e8','#e7f4f4'];
+ placed.forEach((p,i)=>{
+  const x=left+p.x*scale,y=top+p.y*scale,w=p.w*scale,h=p.h*scale;
+  const color=fills[i%fills.length];
+  const id=`clip${i}`;
+  s+=`<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${Math.max(1,w)}" height="${Math.max(1,h)}"/></clipPath></defs>`;
+  s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#222" stroke-width="1"/>`;
 
- // Top width dimension
- ctx.fillStyle='#333'; ctx.strokeStyle='#333'; ctx.lineWidth=1;
- ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
- ctx.fillText(`필름 폭 ${stock} mm`, ox+filmW/2, 18);
- ctx.beginPath(); ctx.moveTo(ox,25); ctx.lineTo(ox+filmW,25); ctx.stroke();
- ctx.beginPath(); ctx.moveTo(ox,25); ctx.lineTo(ox+8,21); ctx.moveTo(ox,25); ctx.lineTo(ox+8,29);
- ctx.moveTo(ox+filmW,25); ctx.lineTo(ox+filmW-8,21); ctx.moveTo(ox+filmW,25); ctx.lineTo(ox+filmW-8,29); ctx.stroke();
+  // Dimension label is always kept inside the rectangle by clipping and adaptive font sizing.
+  const minPx=Math.min(w,h);
+  const dimSize=Math.max(10,Math.min(28,minPx/3.2));
+  const nameSize=Math.max(9,Math.min(17,dimSize*0.62));
+  const cx=x+w/2,cy=y+h/2;
+  if(w>=55 && h>=34){
+    const lines=labelLines(p);
+    s+=`<g clip-path="url(#${id})" font-family="Arial,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#111">`;
+    s+=`<text x="${cx}" y="${cy-dimSize*.45}" font-size="${nameSize}" font-weight="700">${esc(lines[0])}</text>`;
+    s+=`<text x="${cx}" y="${cy+dimSize*.55}" font-size="${dimSize}" font-weight="800">${esc(lines[1])}</text></g>`;
+  }else if(w>=38 && h>=24){
+    s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${Math.max(9,Math.min(15,minPx/2.5))}" font-weight="800" fill="#111">${esc(mm(p.w)+' × '+mm(p.h))}</text>`;
+  }
+ });
 
- if(!placed.length){
-   ctx.fillStyle='#9ca3af'; ctx.textAlign='center'; ctx.font='16px sans-serif';
-   ctx.fillText('배치 결과가 여기에 표시됩니다',ox+filmW/2,oy+Math.min(filmH/2,300));
- } else {
-   placed.forEach(p=>{
-     const x=ox+p.x*s, y=oy+p.y*s, w=p.w*s, h=p.h*s;
-     // Light alternating fills by item name, deterministic without fixed color palette.
-     const fills=['#f8d7da','#dbeafe','#dcfce7','#ede9fe','#fef3c7','#e0f2fe'];
-     let hash=0; for(let i=0;i<p.name.length;i++) hash=p.name.charCodeAt(i)+((hash<<5)-hash);
-     ctx.fillStyle=fills[Math.abs(hash)%fills.length];
-     ctx.fillRect(x,y,w,h);
-     ctx.strokeStyle='#222'; ctx.lineWidth=1.2; ctx.strokeRect(x,y,w,h);
-
-     // Large, centered labels. Dimensions are intentionally the most prominent text.
-     const minSide=Math.min(w,h);
-     let dimSize=Math.max(13,Math.min(34,minSide/5.2));
-     let nameSize=Math.max(11,Math.min(22,dimSize*0.62));
-     ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#111';
-
-     if(w>55 && h>45){
-       ctx.font=`700 ${nameSize}px sans-serif`;
-       ctx.fillText(p.name, x+w/2, y+h/2-dimSize*0.48);
-       ctx.font=`800 ${dimSize}px sans-serif`;
-       ctx.fillText(`${Math.round(p.w)} × ${Math.round(p.h)}${p.rot?' ↻':''}`, x+w/2, y+h/2+dimSize*0.48);
-     } else if(w>35 && h>24){
-       ctx.font=`700 ${Math.max(9,Math.min(16,minSide/3))}px sans-serif`;
-       ctx.fillText(`${Math.round(p.w)} × ${Math.round(p.h)}`,x+w/2,y+h/2);
-     }
-   });
- }
-
- // Right-side length labels
- const rx=ox+filmW+24;
- ctx.strokeStyle='#555'; ctx.lineWidth=1;
- ctx.beginPath(); ctx.moveTo(rx,oy); ctx.lineTo(rx,oy+filmH); ctx.stroke();
- ctx.textAlign='left'; ctx.fillStyle='#374151'; ctx.font='bold 12px sans-serif';
- ctx.fillText(`전체 ${Math.round(len)} mm`,rx+8,oy+12);
- if(placed.length){
-   const used=Math.max(...placed.map(p=>p.y+p.h));
-   ctx.fillStyle='#166534';
-   ctx.fillText(`사용 ${Math.round(used)} mm`,rx+8,oy+34);
-   ctx.fillStyle='#6b7280';
-   ctx.fillText(`잔여 ${Math.round(len-used)} mm`,rx+8,oy+56);
- }
-
- ctx.textAlign='center'; ctx.fillStyle='#374151'; ctx.font='12px sans-serif';
- ctx.fillText(`전체 필름 길이 ${Math.round(len)} mm`,ox+filmW/2,oy+filmH+28);
+ const used=placed.length?Math.max(...placed.map(p=>p.y+p.h)):0;
+ const remain=Math.max(0,len-used);
+ const rx=left+filmW+25;
+ s+=`<line x1="${rx}" y1="${top}" x2="${rx}" y2="${top+filmH}" stroke="#777"/>
+ <text x="${rx+10}" y="${top+18}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#374151">전체 ${mm(len)} mm</text>
+ <text x="${rx+10}" y="${top+40}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#166534">사용 ${mm(used)} mm</text>
+ <text x="${rx+10}" y="${top+62}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#d97706">잔여 ${mm(remain)} mm</text>
+ <text x="${left+filmW/2}" y="${top+filmH+30}" text-anchor="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" fill="#374151">전체 필름 길이 ${mm(len)} mm</text>
+ </svg>`;
+ svgHost.innerHTML=s;
+ document.getElementById('zoomText').textContent=Math.round(zoom*100)+'%';
 }
-window.addEventListener('resize',()=>{if(placed.length)draw()});
-document.getElementById('calc').onclick=calc;
-document.getElementById('clear').onclick=()=>{piecesEl.innerHTML='';placed=[];rollLen=0;document.getElementById('result').textContent='부재를 입력하고 배치 계산을 눌러주세요.';draw()};
-document.getElementById('save').onclick=()=>{
+
+function setFitZoom(){
+ const stock=+document.getElementById('stock').value||1220;
+ const available=Math.max(260,viewer.clientWidth-30);
+ baseScale=Math.min(.5,available/stock);
+ zoom=1;
+}
+document.getElementById('fit').onclick=()=>{setFitZoom();draw()};
+document.getElementById('plus').onclick=()=>{zoom=Math.min(3,zoom*1.25);draw()};
+document.getElementById('minus').onclick=()=>{zoom=Math.max(.5,zoom/1.25);draw()};
+
+document.getElementById('save').onclick=async()=>{
  if(!placed.length){alert('먼저 배치 계산을 해주세요.');return}
- const a=document.createElement('a');a.download='film-cutting-layout.png';a.href=canvas.toDataURL('image/png');a.click();
+ const svg=document.getElementById('layoutSvg');
+ const serializer=new XMLSerializer();
+ const svgText=serializer.serializeToString(svg);
+ const blob=new Blob([svgText],{type:'image/svg+xml;charset=utf-8'});
+ const url=URL.createObjectURL(blob);
+ const img=new Image();
+ img.onload=()=>{
+   // Keep export within practical browser canvas limits while preserving a white background.
+   const maxH=10000, maxW=3000;
+   const scale=Math.min(maxW/svg.width.baseVal.value,maxH/svg.height.baseVal.value,1);
+   const c=document.createElement('canvas');
+   c.width=Math.max(1,Math.floor(svg.width.baseVal.value*scale));
+   c.height=Math.max(1,Math.floor(svg.height.baseVal.value*scale));
+   const cctx=c.getContext('2d');
+   cctx.fillStyle='#fff';cctx.fillRect(0,0,c.width,c.height);
+   cctx.drawImage(img,0,0,c.width,c.height);
+   c.toBlob(b=>{
+     const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='film-cutting-layout.jpg';a.click();
+     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+   },'image/jpeg',0.95);
+   URL.revokeObjectURL(url);
+ };
+ img.onerror=()=>{URL.revokeObjectURL(url);alert('JPEG 저장에 실패했습니다. 다시 시도해주세요.')};
+ img.src=url;
 };
-draw();
-</script>
-</body>
-</html>
+
+document.getElementById('clear').onclick=()=>{
+ piecesEl.innerHTML='';placed=[];rollLen=0;
+ resultEl.textContent='부재를 입력하고 배치 계산을 눌러주세요.';
+ svgHost.innerHTML='';document.getElementById('rollInfo').textContent='';document.getElementById('zoomText').textContent='100%';
+};
+window.addEventListener('resize',()=>{if(placed.length){setFitZoom();draw()}});
+document.getElementById('rollLength').addEventListener('input',()=>{document.getElementById('rollInfo').textContent=`필름 전체 길이: ${mm(+document.getElementById('rollLength').value||0)} mm (${((+document.getElementById('rollLength').value||0)/1000).toFixed(1)} m)`});
+document.getElementById('stock').addEventListener('input',()=>{if(placed.length){setFitZoom();draw()}});
+
+document.getElementById('rollInfo').textContent='필름 전체 길이: 50,000 mm (50.0 m)';
+</body></html>
