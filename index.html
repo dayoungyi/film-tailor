@@ -43,6 +43,10 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   <div class="sub">필름 폭과 길이를 입력하고 부재를 입력하면 필름 로스를 최소화하도록 자동 배치합니다.</div>
 
   <div class="card">
+    <div style="max-width:620px"><label>현장명</label><input id="siteName" type="text" placeholder="현장명을 입력하세요"></div>
+  </div>
+
+  <div class="card">
     <div class="grid2">
       <div><label>필름 폭 (mm)</label><input id="filmW" type="number" min="1" value="1220"></div>
       <div><label>필름 길이 (mm)</label><input id="filmL" type="number" min="1" value="50000"></div>
@@ -112,6 +116,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   }
   // Permanent storage. This key never changes between versions.
   const STORAGE_KEY='filmTailorSavedData';
+  const SITE_KEY='filmTailorSiteName';
   const LEGACY_KEYS=[
     'filmTailorV12','filmTailorV11','filmTailorV10','filmTailorV9',
     'filmTailorV8','filmTailorV7','filmTailorV6','filmTailorV5',
@@ -126,6 +131,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
       savedAt:Date.now(),
       filmW:$('filmW').value || '1220',
       filmL:$('filmL').value || '50000',
+      siteName:$('siteName').value || '',
       rows:[...rowsEl.querySelectorAll('.row')].map(r=>({
         name:r.querySelector('.name').value,
         w:r.querySelector('.w').value,
@@ -139,6 +145,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     const raw=JSON.stringify(data);
     try{ localStorage.setItem(STORAGE_KEY,raw); }catch(e){}
     try{ localStorage.setItem('filmTailorSavedBackup',raw); }catch(e){}
+    try{ localStorage.setItem(SITE_KEY, data.siteName || ''); }catch(e){}
   }
 
   function saveLocal(){
@@ -202,6 +209,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     if(d){
       $('filmW').value=d.filmW||1220;
       $('filmL').value=d.filmL||50000;
+      $('siteName').value=d.siteName||localStorage.getItem(SITE_KEY)||'';
       d.rows.forEach(x=>rowsEl.appendChild(makeSavedRow(x)));
 
       loading=false;
@@ -212,6 +220,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
     $('filmW').value='1220';
     $('filmL').value='50000';
+    $('siteName').value=localStorage.getItem(SITE_KEY)||'';
     rowsEl.appendChild(makeSavedRow({name:'문짝',w:850,h:2000,qty:1}));
     loading=false;
     saveLocal();
@@ -417,8 +426,9 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
     const svg=`<svg id="resultSvg" xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">
       <rect width="100%" height="100%" fill="#fff"/>
-      <text x="${rollW/2}" y="24" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="20" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
-      <line x1="20" y1="36" x2="${Math.max(20,rollW-20)}" y2="36" stroke="#444"/>
+      <text x="${rollW/2}" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="18" font-weight="700">${esc($('siteName').value.trim())}</text>
+      <text x="${rollW/2}" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="16" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
+      <line x1="20" y1="58" x2="${Math.max(20,rollW-20)}" y2="58" stroke="#444"/>
       <g>${body}</g>
 
       <g font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif">
@@ -471,18 +481,74 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   async function saveJPEG(){
     if(!lastResult||!lastResult.svg){alert('먼저 재단 배치를 계산해주세요.');return;}
-    const svg=lastResult.svg;
-    const xml=new XMLSerializer().serializeToString(svg);
-    const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+    const src=lastResult.svg;
+    const siteName=$('siteName').value.trim() || '현장명 미입력';
+    const used=lastResult.used;
+    const filmW=lastResult.filmW;
+    const scale=0.55;
+    const topH=76;
+    const rollW=filmW*scale;
+    const srcW=Number(src.getAttribute('width'))||src.viewBox.baseVal.width;
+    const cropH=Math.max(1,used*scale);
+    const exportHeader=54;
+    const outH=exportHeader+cropH;
+
+    // JPEG는 50m 전체가 아니라 '첫 재단 시작 ~ 마지막 재단 끝'까지만 저장합니다.
+    // 현장명은 이미지 상단 중앙에 별도로 표시합니다.
+    const sourceGroups=[...src.children].filter(n=>n.tagName==='g');
+    const filmGroup=sourceGroups.find(n=>n.querySelector('rect[stroke="#222"]'));
+    if(!filmGroup){alert('JPEG 저장용 배치 정보를 만들 수 없습니다.');return;}
+
+    const content=filmGroup.cloneNode(true);
+    const outline=content.querySelector('rect[stroke="#222"]');
+    if(outline){
+      outline.setAttribute('y',topH);
+      outline.setAttribute('height',cropH.toFixed(2));
+    }
+    // 원래 화면의 topH만큼 내려간 배치를 export header 아래로 옮깁니다.
+    content.setAttribute('transform',`translate(0,${exportHeader-topH})`);
+
+    // 재단 끝 표시선도 함께 가져오되 마지막 재단 위치까지만 표시합니다.
+    const guideGroup=sourceGroups.find(n=>n.querySelector('line[stroke="#d97706"]'));
+    let guide='';
+    if(guideGroup){
+      const g=guideGroup.cloneNode(true);
+      g.setAttribute('transform',`translate(0,${exportHeader-topH})`);
+      guide=g.outerHTML;
+    }
+
+    const summaryGroup=sourceGroups.find(n=>n.querySelector('text[fill="#15803d"]'));
+    let summary='';
+    if(summaryGroup){
+      const g=summaryGroup.cloneNode(true);
+      g.setAttribute('transform',`translate(0,${exportHeader-topH})`);
+      summary=g.outerHTML;
+    }
+
+    const svgText=`<svg xmlns="http://www.w3.org/2000/svg" width="${srcW}" height="${outH}" viewBox="0 0 ${srcW} ${outH}">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <text x="${srcW/2}" y="32" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="22" font-weight="700">${esc(siteName)}</text>
+      ${content.outerHTML}
+      ${guide}
+      ${summary}
+    </svg>`;
+
+    const blob=new Blob([svgText],{type:'image/svg+xml;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const img=new Image();
     img.onload=()=>{
       const c=document.createElement('canvas');
-      c.width=img.naturalWidth*2;c.height=img.naturalHeight*2;
-      const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+      c.width=Math.max(1,Math.round(img.naturalWidth*2));
+      c.height=Math.max(1,Math.round(img.naturalHeight*2));
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
       ctx.drawImage(img,0,0,c.width,c.height);
       c.toBlob(b=>{
-        const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='필름_재단배치.jpg';a.click();
+        if(!b){URL.revokeObjectURL(url);alert('JPEG 저장 중 오류가 발생했습니다.');return;}
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(b);
+        a.download=`${siteName}_재단배치.jpg`;
+        a.click();
         setTimeout(()=>{URL.revokeObjectURL(url);URL.revokeObjectURL(a.href)},1500);
       },'image/jpeg',0.95);
     };
@@ -492,8 +558,8 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   function clearAll(){
     if(!confirm('입력한 부재와 필름 정보를 모두 삭제할까요?'))return;
-    [STORAGE_KEY,'filmTailorSavedBackup',...LEGACY_KEYS].forEach(k=>localStorage.removeItem(k));
-    rowsEl.innerHTML='';$('summary').textContent='부재를 입력하고 배치 계산을 눌러주세요.';$('svgHost').innerHTML='<div class="placeholder">계산 결과가 여기에 표시됩니다.</div>';lastResult=null;
+    [STORAGE_KEY,'filmTailorSavedBackup',SITE_KEY,...LEGACY_KEYS].forEach(k=>localStorage.removeItem(k));
+    rowsEl.innerHTML='';$('siteName').value='';$('summary').textContent='부재를 입력하고 배치 계산을 눌러주세요.';$('svgHost').innerHTML='<div class="placeholder">계산 결과가 여기에 표시됩니다.</div>';lastResult=null;
   }
 
   $('addBtn').onclick=()=>addRow();
@@ -503,6 +569,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   $('clearBtn').onclick=clearAll;
   $('filmW').addEventListener('input',saveLocal);
   $('filmL').addEventListener('input',saveLocal);
+  $('siteName').addEventListener('input',()=>{localStorage.setItem(SITE_KEY,$('siteName').value);saveLocal();});
   window.addEventListener('beforeunload',saveLocal);
   window.addEventListener('pagehide',saveLocal);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveLocal();});
