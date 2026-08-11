@@ -152,6 +152,113 @@ function updateRollInfo(){
   document.getElementById('rollInfo').textContent=`필름 전체 길이: ${mm(v)} mm (${(v/1000).toFixed(1)} m)`;
 }
 
+
+function rectsOverlap(a,b){
+  return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y);
+}
+function containsRect(a,b){
+  return a.x<=b.x && a.y<=b.y && a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
+}
+
+/* 폭이 고정된 필름을 '높이가 최소가 되는 2D 스트립 패킹'으로 계산합니다.
+   MaxRects 계열의 휴리스틱을 여러 순서/방향으로 반복하고 가장 짧은 사용 길이를 선택합니다.
+   모든 경우의 수를 완전탐색하는 것은 부재가 많을수록 현실적으로 불가능하므로,
+   실사용에서 빠르면서 로스를 크게 줄이는 근사 최적화 방식입니다. */
+function maxRectsPack(items, stock){
+  const totalH=items.reduce((sum,it)=>sum+Math.max(it.w,it.h),0)+1;
+  let free=[{x:0,y:0,w:stock,h:totalH}];
+  const out=[];
+
+  function splitFree(used){
+    const next=[];
+    for(const f of free){
+      if(!rectsOverlap(used,f)){ next.push(f); continue; }
+      const fx2=f.x+f.w, fy2=f.y+f.h, ux2=used.x+used.w, uy2=used.y+used.h;
+      if(used.x>f.x) next.push({x:f.x,y:f.y,w:used.x-f.x,h:f.h});
+      if(ux2<fx2) next.push({x:ux2,y:f.y,w:fx2-ux2,h:f.h});
+      if(used.y>f.y) next.push({x:f.x,y:f.y,w:f.w,h:used.y-f.y});
+      if(uy2<fy2) next.push({x:f.x,y:uy2,w:f.w,h:fy2-uy2});
+    }
+    // 작은/중복 자유영역 제거
+    const clean=[];
+    for(let i=0;i<next.length;i++){
+      const a=next[i];
+      if(a.w<=0.0001||a.h<=0.0001) continue;
+      let contained=false;
+      for(let j=0;j<next.length;j++){
+        if(i!==j && containsRect(next[j],a)){contained=true;break;}
+      }
+      if(!contained) clean.push(a);
+    }
+    free=clean;
+  }
+
+  for(const it of items){
+    let best=null;
+    const rotations=(it.w===it.h)?[false]:[false,true];
+    for(const rot of rotations){
+      const w=rot?it.h:it.w, h=rot?it.w:it.h;
+      if(w>stock) continue;
+      for(const f of free){
+        if(w>f.w || h>f.h) continue;
+        const leftoverH=f.h-h, leftoverW=f.w-w;
+        const short=Math.min(leftoverW,leftoverH);
+        const long=Math.max(leftoverW,leftoverH);
+        const newBottom=Math.max(...out.map(p=>p.y+p.h),0,y=0)+h;
+        // 우선: 필름 전체 사용길이, 그 다음 빈 직사각형의 짧은 변,
+        // 그 다음 긴 변, 그 다음 아래/왼쪽 배치
+        const score=[newBottom,short,long,f.y,f.x];
+        if(!best || score.some((v,i)=>v<best.score[i] || (v===best.score[i]&&false)) &&
+          (function(){
+            for(let i=0;i<score.length;i++){if(score[i]<best.score[i])return true;if(score[i]>best.score[i])return false;}
+            return false;
+          })()){
+          best={x:f.x,y:f.y,w,h,rot,score};
+        }
+      }
+    }
+    if(!best) return null;
+    const placedItem={...it,x:best.x,y:best.y,w:best.w,h:best.h,rot:best.rot};
+    out.push(placedItem);
+    splitFree(placedItem);
+  }
+  return out;
+}
+function packingUsedLength(arr){
+  return arr && arr.length ? Math.max(...arr.map(p=>p.y+p.h)) : Infinity;
+}
+
+function makeOrders(items){
+  const orders=[];
+  const add=(a)=>orders.push(a.map(x=>({...x})));
+  const area=items.slice().sort((a,b)=>(b.w*b.h)-(a.w*a.h)||Math.max(b.w,b.h)-Math.max(a.w,a.h));
+  add(area);
+  add(items.slice().sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h)||(b.w*b.h)-(a.w*a.h)));
+  add(items.slice().sort((a,b)=>b.h-a.h||b.w-a.w));
+  add(items.slice().sort((a,b)=>b.w-a.w||b.h-a.h));
+  add(items.slice().sort((a,b)=>(b.w+b.h)-(a.w+a.h)||(b.w*b.h)-(a.w*a.h)));
+  add(items.slice().sort((a,b)=>Math.min(b.w,b.h)-Math.min(a.w,a.h)||(b.w*b.h)-(a.w*a.h)));
+
+  // 반복해서 약간 다른 순서를 만들고, 같은 결과가 나오는 순서는 자연스럽게 중복되어도 무방합니다.
+  for(let t=0;t<90;t++){
+    const a=items.slice();
+    // 큰 부재를 우선하되 동률/근접 크기에서는 무작위로 섞음
+    a.sort((x,y)=>{
+      const ax=x.w*x.h, ay=y.w*y.h;
+      const diff=Math.abs(ax-ay)/Math.max(ax,ay);
+      if(diff<0.18) return Math.random()-0.5;
+      return ay-ax;
+    });
+    // 20% 확률로 앞쪽 몇 개를 섞어 다른 배치 구조를 유도
+    if(Math.random()<0.45){
+      const n=Math.min(a.length,8);
+      for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+    }
+    add(a);
+  }
+  return orders;
+}
+
 function calc(){
   saveLocal();
   const stock=+document.getElementById('stock').value;
@@ -164,51 +271,48 @@ function calc(){
   pieces.forEach(p=>{
     for(let i=0;i<p.q;i++)items.push({name:p.name,w:p.w,h:p.h,idx:i+1,total:p.q});
   });
-  items.sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h));
+  if(items.some(it=>it.w>stock && it.h>stock)){
+    const bad=items.find(it=>it.w>stock&&it.h>stock);
+    alert(`${bad.name} (${mm(bad.w)} × ${mm(bad.h)})는 필름 폭 ${mm(stock)}mm에 들어가지 않습니다.`);
+    return;
+  }
 
-  let rows=[],out=[];
-  for(const it of items){
-    let best=null;
-    for(const rot of [false,true]){
-      const w=rot?it.h:it.w,h=rot?it.w:it.h;
-      if(w>stock)continue;
-      rows.forEach((r,ri)=>{
-        if(h<=r.h && r.x+w<=stock){
-          const score=(r.h-h)+(stock-(r.x+w))*0.01;
-          if(!best||score<best.score)best={score,ri,w,h,rot};
-        }
-      });
-    }
-    if(best){
-      const r=rows[best.ri];
-      out.push({...it,x:r.x,y:r.y,w:best.w,h:best.h,rot:best.rot});
-      r.x+=best.w;
-    }else{
-      let opts=[];
-      for(const rot of [false,true]){
-        const w=rot?it.h:it.w,h=rot?it.w:it.h;
-        if(w<=stock)opts.push({w,h,rot});
-      }
-      if(!opts.length){
-        alert(`${it.name} (${it.w}×${it.h})는 필름 폭 ${stock}mm보다 큽니다.`);
-        return;
-      }
-      opts.sort((a,b)=>a.h-b.h);
-      const o=opts[0];
-      const y=rows.reduce((s,r)=>s+r.h,0);
-      rows.push({y,h:o.h,x:o.w});
-      out.push({...it,x:0,y,w:o.w,h:o.h,rot:o.rot});
+  // 최소 사용길이를 1순위로 비교하는 다중 시작 최적화
+  const orders=makeOrders(items);
+  let best=null;
+  for(const order of orders){
+    const packed=maxRectsPack(order,stock);
+    if(!packed) continue;
+    const used=packingUsedLength(packed);
+    const area=stock*used;
+    const itemArea=items.reduce((sum,p)=>sum+p.w*p.h,0);
+    const waste=area-itemArea;
+    if(!best || used<best.used || (used===best.used && waste<best.waste)){
+      best={packed,used,waste};
     }
   }
 
-  const usedLen=Math.max(...out.map(p=>p.y+p.h));
+  if(!best){alert('현재 부재를 필름 폭 안에 배치할 수 없습니다.');return;}
+  const usedLen=best.used;
   if(usedLen>rollLength){
     alert(`입력한 필름 길이 ${mm(rollLength)}mm보다 필요한 길이 ${mm(usedLen)}mm가 더 깁니다.`);
     return;
   }
-  placed=out;rollLen=rollLength;
+
+  placed=best.packed;
+  rollLen=rollLength;
   const remain=rollLength-usedLen;
-  resultEl.textContent=`필름: ${mm(stock)} × ${mm(rollLength)} mm  |  사용 길이: ${mm(usedLen)} mm  |  남은 길이: ${mm(remain)} mm  |  부재 ${out.length}개`;
+  const totalArea=items.reduce((sum,p)=>sum+p.w*p.h,0);
+  const usedArea=stock*usedLen;
+  const utilization=usedArea>0?(totalArea/usedArea)*100:0;
+  const waste=Math.max(0,100-utilization);
+
+  resultEl.textContent=
+    `필름: ${mm(stock)} × ${mm(rollLength)} mm  | `+
+    `사용 길이: ${mm(usedLen)} mm  | 남은 길이: ${mm(remain)} mm | `+
+    `부재 ${placed.length}개 | 최소 로스 우선 | `+
+    `재단면적 활용률: ${utilization.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
+
   updateRollInfo();
   setFitZoom();
   draw();
@@ -267,14 +371,17 @@ function draw(){
 
     if(w>=48 && h>=42){
       const dimSize=fitFont(dimText,availW,Math.max(12,availH*.42),30,8);
-      const nameSize=fitFont(nameText,availW,Math.max(10,availH*.25),18,7);
+      // 부재명은 실제 글자 폭을 SVG가 강제로 사각형 안에 맞추도록 함
+      // (한글은 폰트마다 실제 폭이 달라 기존 계산만으로는 잘릴 수 있음)
+      const nameSize=Math.max(8,Math.min(16,availH*.25));
       const total=nameSize+dimSize+Math.max(3,dimSize*.18);
       if(total<=availH && dimSize>=8){
         const gap=Math.max(3,dimSize*.18);
         const nameY=cy-(dimSize/2+gap/2);
         const dimY=cy+(nameSize/2+gap/2);
+        const nameWidth=Math.max(8,availW);
         s+=`<g clip-path="url(#${id})" font-family="Arial,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#111">`;
-        s+=`<text x="${cx}" y="${nameY}" dominant-baseline="middle" font-size="${nameSize}" font-weight="700">${esc(nameText)}</text>`;
+        s+=`<text x="${cx}" y="${nameY}" dominant-baseline="middle" font-size="${nameSize}" font-weight="700" textLength="${nameWidth}" lengthAdjust="spacingAndGlyphs">${esc(nameText)}</text>`;
         s+=`<text x="${cx}" y="${dimY}" dominant-baseline="middle" font-size="${dimSize}" font-weight="800">${dimText}</text></g>`;
       }else{
         const dimSize2=fitFont(dimText,availW,availH,30,7);
