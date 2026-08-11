@@ -184,75 +184,145 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   // MaxRects-like heuristic: keep free rectangles and choose the placement
   // that minimizes resulting short-axis waste, then long-axis waste.
-  function pack(items, filmW){
-    const orders=[];
+  function pack(items, filmW, filmL){
+    // Robust finite-bin MaxRects heuristic.
+    // Using the actual 50m film length as the initial bin prevents
+    // Infinity-related free-space bugs and guarantees placements stay
+    // inside the available roll length.
     const base=[...items];
-    const sorters=[
-      a=>-(Math.max(a.w,a.h)*Math.min(a.w,a.h)),
-      a=>-Math.max(a.w,a.h),
-      a=>-(a.w*a.h),
-      a=>-Math.min(a.w,a.h)
-    ];
-    for(const s of sorters) orders.push([...base].sort(s));
-    for(let k=0;k<4;k++) orders.push([...base].sort(()=>Math.random()-.5));
+    const orders=[];
+    const area=i=>i.w*i.h;
+    const dims=i=>Math.max(i.w,i.h);
+    const minDim=i=>Math.min(i.w,i.h);
+
+    const makeOrder=(arr,cmp)=>[...arr].sort(cmp);
+    orders.push(makeOrder(base,(a,b)=>area(b)-area(a)));
+    orders.push(makeOrder(base,(a,b)=>dims(b)-dims(a)));
+    orders.push(makeOrder(base,(a,b)=>minDim(b)-minDim(a)));
+    orders.push(makeOrder(base,(a,b)=>(b.w+b.h)-(a.w+a.h)));
+    orders.push(makeOrder(base,(a,b)=>b.h-a.h || b.w-a.w));
+    orders.push(makeOrder(base,(a,b)=>b.w-a.w || b.h-a.h));
+
+    // Deterministic variants give the heuristic more chances to find
+    // tighter combinations without making the browser hang.
+    for(let k=0;k<10;k++){
+      const arr=[...base];
+      let seed=12345+k*97;
+      arr.sort(()=>{
+        seed=(seed*1664525+1013904223)>>>0;
+        return (seed/4294967296)-0.5;
+      });
+      orders.push(arr);
+    }
+
+    function intersects(a,b){
+      return !(a.x>=b.x+b.w || a.x+a.w<=b.x ||
+               a.y>=b.y+b.h || a.y+a.h<=b.y);
+    }
+
+    function prune(rects){
+      const out=[];
+      for(let i=0;i<rects.length;i++){
+        const r=rects[i];
+        if(r.w<=0||r.h<=0) continue;
+        let contained=false;
+        for(let j=0;j<rects.length;j++){
+          if(i===j) continue;
+          const q=rects[j];
+          if(r.x>=q.x && r.y>=q.y &&
+             r.x+r.w<=q.x+q.w && r.y+r.h<=q.y+q.h){
+            contained=true; break;
+          }
+        }
+        if(!contained) out.push(r);
+      }
+      return out;
+    }
 
     let best=null;
+
     for(const order of orders){
-      const placed=[], free=[{x:0,y:0,w:filmW,h:Infinity}];
-      let maxY=0;
-      let ok=true;
+      let free=[{x:0,y:0,w:filmW,h:filmL}];
+      const placed=[];
+      let failed=false;
+
       for(const it of order){
-        let bestPos=null;
-        const orientations = it.w===it.h ? [[it.w,it.h,0]] : [[it.w,it.h,0],[it.h,it.w,1]];
+        let chosen=null;
+
+        const orientations = it.w===it.h
+          ? [[it.w,it.h,0]]
+          : [[it.w,it.h,0],[it.h,it.w,1]];
+
         for(const fr of free){
           for(const [pw,ph,rot] of orientations){
-            if(pw<=fr.w && (fr.h===Infinity || ph<=fr.h)){
-              const shortWaste=fr.w-pw;
-              const longWaste=(fr.h===Infinity?0:fr.h-ph);
-              const score=[shortWaste, longWaste, fr.y, fr.x];
-              if(!bestPos || score.join(',')<bestPos.score.join(',')){
-                bestPos={x:fr.x,y:fr.y,w:pw,h:ph,rot,score};
-              }
+            if(pw>fr.w || ph>fr.h) continue;
+
+            const leftoverW=fr.w-pw;
+            const leftoverH=fr.h-ph;
+            // Best short-side fit first; then long-side fit.
+            const score=[
+              Math.min(leftoverW,leftoverH),
+              Math.max(leftoverW,leftoverH),
+              fr.y,
+              fr.x
+            ];
+
+            if(!chosen || score[0]<chosen.score[0] ||
+              (score[0]===chosen.score[0] && score[1]<chosen.score[1]) ||
+              (score[0]===chosen.score[0] && score[1]===chosen.score[1] &&
+               (score[2]<chosen.score[2] ||
+                (score[2]===chosen.score[2]&&score[3]<chosen.score[3])))){
+              chosen={x:fr.x,y:fr.y,w:pw,h:ph,rot,score};
             }
           }
         }
-        if(!bestPos){ok=false;break;}
-        placed.push({...it,...bestPos});
-        maxY=Math.max(maxY,bestPos.y+bestPos.h);
-        // Split free rectangles around the chosen rectangle.
-        const nf=[];
+
+        if(!chosen){ failed=true; break; }
+
+        placed.push({...it,...chosen});
+
+        const newFree=[];
         for(const fr of free){
-          const inter=!(bestPos.x>=fr.x+fr.w || bestPos.x+bestPos.w<=fr.x ||
-                         bestPos.y>=fr.y+(fr.h===Infinity?Infinity:fr.h) ||
-                         bestPos.y+bestPos.h<=fr.y);
-          if(!inter){nf.push(fr);continue;}
-          if(bestPos.x>fr.x) nf.push({x:fr.x,y:fr.y,w:bestPos.x-fr.x,h:fr.h});
-          if(bestPos.x+bestPos.w<fr.x+fr.w) nf.push({x:bestPos.x+bestPos.w,y:fr.y,w:fr.x+fr.w-(bestPos.x+bestPos.w),h:fr.h});
-          if(bestPos.y>fr.y) nf.push({x:fr.x,y:fr.y,w:fr.w,h:bestPos.y-fr.y});
-          if(fr.h!==Infinity && bestPos.y+bestPos.h<fr.y+fr.h) nf.push({x:fr.x,y:bestPos.y+bestPos.h,w:fr.w,h:fr.y+fr.h-(bestPos.y+bestPos.h)});
-        }
-        // Remove contained free rectangles.
-        const clean=[];
-        for(let i=0;i<nf.length;i++){
-          if(nf[i].w<=0||nf[i].h<=0)continue;
-          let contained=false;
-          for(let j=0;j<nf.length;j++) if(i!==j){
-            const a=nf[i],b=nf[j];
-            if(a.x>=b.x&&a.y>=b.y&&a.x+a.w<=b.x+b.w&&
-              (b.h===Infinity || (a.h!==Infinity&&a.y+a.h<=b.y+b.h))){
-              contained=true;break;
-            }
+          if(!intersects(chosen,fr)){
+            newFree.push(fr);
+            continue;
           }
-          if(!contained)clean.push(nf[i]);
+
+          // Split around the placed rectangle into up to four rectangles.
+          if(chosen.x>fr.x)
+            newFree.push({x:fr.x,y:fr.y,w:chosen.x-fr.x,h:fr.h});
+          if(chosen.x+chosen.w<fr.x+fr.w)
+            newFree.push({
+              x:chosen.x+chosen.w,y:fr.y,
+              w:fr.x+fr.w-(chosen.x+chosen.w),h:fr.h
+            });
+          if(chosen.y>fr.y)
+            newFree.push({x:fr.x,y:fr.y,w:fr.w,h:chosen.y-fr.y});
+          if(chosen.y+chosen.h<fr.y+fr.h)
+            newFree.push({
+              x:fr.x,y:chosen.y+chosen.h,
+              w:fr.w,h:fr.y+fr.h-(chosen.y+chosen.h)
+            });
         }
-        free.length=0; free.push(...clean);
+
+        free=prune(newFree);
       }
-      if(ok){
-        const area=placed.reduce((s,p)=>s+p.w*p.h,0);
-        const score=maxY*filmW-area*0.00001;
-        if(!best || maxY<best.maxY || (maxY===best.maxY && score<best.score)) best={placed,maxY,area,score};
+
+      if(failed) continue;
+
+      const used=placed.reduce((m,p)=>Math.max(m,p.y+p.h),0);
+      const partArea=placed.reduce((s,p)=>s+p.w*p.h,0);
+      const wasteArea=Math.max(0,used*filmW-partArea);
+
+      // Primary objective: shortest used film length.
+      // Secondary: least unused area within the used length.
+      const score=used*1e9+wasteArea;
+
+      if(!best || score<best.score){
+        best={placed,maxY:used,area:partArea,score};
       }
     }
+
     return best;
   }
 
@@ -307,7 +377,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     if(!items.length){alert('부재를 하나 이상 입력해주세요.');return;}
     const impossible=items.find(i=>Math.min(i.w,i.h)>filmW);
     if(impossible){alert(`필름 폭 ${filmW}mm에 들어가지 않는 부재가 있습니다: ${impossible.name} (${impossible.w}×${impossible.h})`);return;}
-    const result=pack(items,filmW);
+    const result=pack(items,filmW,filmL);
     if(!result){alert('배치 계산에 실패했습니다.');return;}
     const used=result.maxY, remain=Math.max(0,filmL-used);
     const materialArea=used*filmW;
