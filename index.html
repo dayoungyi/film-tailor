@@ -484,79 +484,72 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   async function saveJPEG(){
     if(!lastResult||!lastResult.svg){alert('먼저 재단 배치를 계산해주세요.');return;}
+
     const src=lastResult.svg;
     const siteName=$('siteName').value.trim() || '현장명 미입력';
     const used=lastResult.used;
-    const filmW=lastResult.filmW;
-    const scale=0.55;
-    const topH=76;
-    const rollW=filmW*scale;
-    const exportMargin=20;
+
+    // 화면에 보이는 재단 배치 SVG를 그대로 사용합니다.
+    // 따라서 현장명/필름 폭/전체·사용·남음/필름 중앙정렬이
+    // 웹 화면과 JPEG에서 완전히 동일하게 유지됩니다.
     const srcW=Number(src.getAttribute('width'))||src.viewBox.baseVal.width;
-    const cropH=Math.max(1,used*scale);
-    const exportHeader=54;
-    const outH=exportHeader+cropH;
+    const srcH=Number(src.getAttribute('height'))||src.viewBox.baseVal.height;
 
-    // JPEG는 50m 전체가 아니라 '첫 재단 시작 ~ 마지막 재단 끝'까지만 저장합니다.
-    // 현장명은 이미지 상단 중앙에 별도로 표시합니다.
-    const sourceGroups=[...src.children].filter(n=>n.tagName==='g');
-    const filmGroup=sourceGroups.find(n=>n.querySelector('rect[stroke="#222"]'));
-    if(!filmGroup){alert('JPEG 저장용 배치 정보를 만들 수 없습니다.');return;}
+    // 마지막 재단선 아래에 안내 문구가 들어갈 약간의 여백만 남기고
+    // 50m 전체의 빈 필름 부분은 JPEG에서 잘라냅니다.
+    const scale=0.55;
+    const topH=64;
+    const bottomMargin=42;
+    const cropH=Math.min(srcH, topH + used*scale + bottomMargin);
 
-    const content=filmGroup.cloneNode(true);
-    const outline=content.querySelector('rect[stroke="#222"]');
-    if(outline){
-      outline.setAttribute('y',topH);
-      outline.setAttribute('height',cropH.toFixed(2));
-    }
-    // 원래 화면의 topH만큼 내려간 배치를 export header 아래로 옮깁니다.
-    content.setAttribute('transform',`translate(0,${exportHeader-topH})`);
+    const clone=src.cloneNode(true);
+    clone.setAttribute('width', srcW);
+    clone.setAttribute('height', cropH);
+    clone.setAttribute('viewBox', `0 0 ${srcW} ${cropH}`);
 
-    // 재단 끝 표시선도 함께 가져오되 마지막 재단 위치까지만 표시합니다.
-    const guideGroup=sourceGroups.find(n=>n.querySelector('line[stroke="#d97706"]'));
-    let guide='';
-    if(guideGroup){
-      const g=guideGroup.cloneNode(true);
-      g.setAttribute('transform',`translate(0,${exportHeader-topH})`);
-      guide=g.outerHTML;
-    }
-
-    const summaryGroup=sourceGroups.find(n=>n.querySelector('text[fill="#15803d"]'));
-    let summary='';
-    if(summaryGroup){
-      const g=summaryGroup.cloneNode(true);
-      g.setAttribute('transform',`translate(0,${exportHeader-topH})`);
-      summary=g.outerHTML;
-    }
-
-    const svgText=`<svg xmlns="http://www.w3.org/2000/svg" width="${srcW}" height="${outH}" viewBox="0 0 ${srcW} ${outH}">
-      <rect width="100%" height="100%" fill="#fff"/>
-      <text x="${srcW/2}" y="32" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="22" font-weight="700">${esc(siteName)}</text>
-      ${content.outerHTML}
-      ${guide}
-      ${summary}
-    </svg>`;
-
+    // 흰 배경을 포함한 동일한 재단 배치 이미지를 JPEG로 변환합니다.
+    const svgText=new XMLSerializer().serializeToString(clone);
     const blob=new Blob([svgText],{type:'image/svg+xml;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const img=new Image();
+
     img.onload=()=>{
+      // 고해상도 JPEG
       const c=document.createElement('canvas');
-      c.width=Math.max(1,Math.round(img.naturalWidth*2));
-      c.height=Math.max(1,Math.round(img.naturalHeight*2));
+      const exportScale=2;
+      c.width=Math.max(1,Math.round(srcW*exportScale));
+      c.height=Math.max(1,Math.round(cropH*exportScale));
+
       const ctx=c.getContext('2d');
-      ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+      ctx.fillStyle='#fff';
+      ctx.fillRect(0,0,c.width,c.height);
       ctx.drawImage(img,0,0,c.width,c.height);
+
       c.toBlob(b=>{
-        if(!b){URL.revokeObjectURL(url);alert('JPEG 저장 중 오류가 발생했습니다.');return;}
+        if(!b){
+          URL.revokeObjectURL(url);
+          alert('JPEG 저장 중 오류가 발생했습니다.');
+          return;
+        }
+
+        const outUrl=URL.createObjectURL(b);
         const a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
+        a.href=outUrl;
         a.download=`${siteName}_재단배치.jpg`;
         a.click();
-        setTimeout(()=>{URL.revokeObjectURL(url);URL.revokeObjectURL(a.href)},1500);
+
+        setTimeout(()=>{
+          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(outUrl);
+        },1500);
       },'image/jpeg',0.95);
     };
-    img.onerror=()=>{URL.revokeObjectURL(url);alert('JPEG 변환 중 오류가 발생했습니다.');};
+
+    img.onerror=()=>{
+      URL.revokeObjectURL(url);
+      alert('JPEG 변환 중 오류가 발생했습니다.');
+    };
+
     img.src=url;
   }
 
