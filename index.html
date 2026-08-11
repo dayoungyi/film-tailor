@@ -214,6 +214,24 @@ function calc(){
   draw();
 }
 
+function sizeKey(p){
+  const a=Math.round(p.w), b=Math.round(p.h);
+  return `${Math.min(a,b)}x${Math.max(a,b)}`;
+}
+function sizeColor(key){
+  // 같은 치수는 항상 같은 색, 서로 다른 치수는 가능한 한 서로 다른 색
+  let h=0;
+  for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
+  const hue=(h*137.508)%360;
+  return `hsl(${hue.toFixed(0)},62%,88%)`;
+}
+function fitFont(text, maxWidth, maxHeight, maxSize, minSize){
+  const chars=[...text].length;
+  const byWidth=maxWidth/Math.max(1,chars*0.62);
+  const byHeight=maxHeight;
+  return Math.max(minSize,Math.min(maxSize,byWidth,byHeight));
+}
+
 function draw(){
   const stock=+document.getElementById('stock').value||1220;
   const len=Math.max(+(document.getElementById('rollLength').value)||50000,500);
@@ -230,25 +248,43 @@ function draw(){
   <polygon points="${left+filmW},38 ${left+filmW-8},34 ${left+filmW-8},42" fill="#555"/>
   <rect x="${left}" y="${top}" width="${filmW}" height="${filmH}" fill="#fff" stroke="#222" stroke-width="2"/>`;
 
-  const fills=['#e5f3ff','#fff1c7','#e8f5e9','#f0e8ff','#ffe8e8','#e7f4f4'];
   placed.forEach((p,i)=>{
     const x=left+p.x*scale,y=top+p.y*scale,w=p.w*scale,h=p.h*scale;
-    const color=fills[i%fills.length];
+    const color=sizeColor(sizeKey(p));
     const id=`clip${i}`;
     s+=`<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${Math.max(1,w)}" height="${Math.max(1,h)}"/></clipPath></defs>`;
     s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#222" stroke-width="1"/>`;
 
-    const minPx=Math.min(w,h);
-    const dimSize=Math.max(10,Math.min(30,minPx/3.0));
-    const nameSize=Math.max(9,Math.min(18,dimSize*.62));
     const cx=x+w/2,cy=y+h/2;
+    const dimText=`${mm(p.w)} × ${mm(p.h)}`;
+    const nameText=p.name;
 
-    if(w>=55 && h>=38){
-      s+=`<g clip-path="url(#${id})" font-family="Arial,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#111">`;
-      s+=`<text x="${cx}" y="${cy-dimSize*.48}" font-size="${nameSize}" font-weight="700">${esc(p.name)}</text>`;
-      s+=`<text x="${cx}" y="${cy+dimSize*.58}" font-size="${dimSize}" font-weight="800">${mm(p.w)} × ${mm(p.h)}</text></g>`;
-    }else if(w>=38 && h>=24){
-      s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${Math.max(9,Math.min(15,minPx/2.5))}" font-weight="800" fill="#111">${mm(p.w)} × ${mm(p.h)}</text>`;
+    // 사각형 안쪽 여백을 확보하고, 치수 글자가 반드시 폭/높이 안에 들어오도록 자동 축소
+    const padX=Math.max(4,Math.min(12,w*.08));
+    const padY=Math.max(3,Math.min(10,h*.08));
+    const availW=Math.max(12,w-padX*2);
+    const availH=Math.max(12,h-padY*2);
+
+    if(w>=48 && h>=42){
+      const dimSize=fitFont(dimText,availW,Math.max(12,availH*.42),30,8);
+      const nameSize=fitFont(nameText,availW,Math.max(10,availH*.25),18,7);
+      const total=nameSize+dimSize+Math.max(3,dimSize*.18);
+      if(total<=availH && dimSize>=8){
+        const gap=Math.max(3,dimSize*.18);
+        const nameY=cy-(dimSize/2+gap/2);
+        const dimY=cy+(nameSize/2+gap/2);
+        s+=`<g clip-path="url(#${id})" font-family="Arial,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#111">`;
+        s+=`<text x="${cx}" y="${nameY}" dominant-baseline="middle" font-size="${nameSize}" font-weight="700">${esc(nameText)}</text>`;
+        s+=`<text x="${cx}" y="${dimY}" dominant-baseline="middle" font-size="${dimSize}" font-weight="800">${dimText}</text></g>`;
+      }else{
+        const dimSize2=fitFont(dimText,availW,availH,30,7);
+        s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${dimSize2}" font-weight="800" fill="#111">${dimText}</text>`;
+      }
+    }else if(w>=28 && h>=20){
+      const dimSize=fitFont(dimText,availW,availH,18,6);
+      if(dimSize>=6){
+        s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${dimSize}" font-weight="800" fill="#111">${dimText}</text>`;
+      }
     }
   });
 
