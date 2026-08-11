@@ -385,11 +385,14 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     // This makes the remaining 50m roll area visible at a glance.
     const scale=0.55; // screen-friendly mm->px base
     const topH=64;
-    const sideW=40;
-    const svgW=filmW+sideW;
-    const filmX=20;
+    // 화면 좌표를 실제 px 기준으로 통일합니다.
+    // 필름은 좌우 여백이 같도록 가운데 배치하고, 요약 정보는 우측 상단에 둡니다.
+    const rollW=filmW*scale;
+    const sideW=130;
+    const filmX=sideW/2;
+    const svgW=rollW+sideW;
     const rollH=Math.max(filmL,used,1)*scale;
-    const pxW=svgW*scale, pxH=topH+rollH;
+    const pxW=svgW, pxH=topH+rollH;
 
     const colors=new Map();
     let ci=0;
@@ -397,7 +400,6 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     let body='';
 
     // Full-roll outline + used/remaining guides.
-    const rollW=filmW*scale;
     const usedY=topH+used*scale;
     const totalY=topH+filmL*scale;
     const remain=Math.max(0,filmL-used);
@@ -427,18 +429,18 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
     const svg=`<svg id="resultSvg" xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">
       <rect width="100%" height="100%" fill="#fff"/>
-      <text x="${svgW/2}" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="18" font-weight="700">${esc($('siteName').value.trim())}</text>
-      <text x="${svgW/2}" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="16" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
+      <text x="${(filmX+rollW/2).toFixed(2)}" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="18" font-weight="700">${esc($('siteName').value.trim())}</text>
+      <text x="${(filmX+rollW/2).toFixed(2)}" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="16" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
       <line x1="${filmX+20}" y1="58" x2="${Math.max(filmX+20,filmX+rollW-20)}" y2="58" stroke="#444"/>
       <g transform="translate(${filmX},0)">${body}</g>
 
       <g font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif">
-        <text x="${svgW-12}" y="18" text-anchor="end" font-size="14" font-weight="700">전체 ${filmL.toLocaleString()} mm</text>
-        <text x="${svgW-12}" y="38" text-anchor="end" font-size="14" font-weight="700" fill="#15803d">사용 ${used.toLocaleString()} mm</text>
-        <text x="${svgW-12}" y="58" text-anchor="end" font-size="14" font-weight="700" fill="#d97706">남음 ${remain.toLocaleString()} mm</text>
-        <text x="${Math.min(rollW-8, rollW/2)}" y="${Math.max(topH+30,usedY-8)}" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">재단 끝 (${used.toLocaleString()} mm)</text>
-        <text x="${Math.min(rollW-8, rollW/2)}" y="${Math.min(totalY-8, usedY+26)}" text-anchor="middle" font-size="13" font-weight="700" fill="#64748b">남은 필름 ${remain.toLocaleString()} mm</text>
-        <text x="${rollW/2}" y="${totalY+22}" text-anchor="middle" font-size="13" fill="#475569">필름 끝 · ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm</text>
+        <text x="${svgW-10}" y="18" text-anchor="end" font-size="14" font-weight="700">전체 ${filmL.toLocaleString()} mm</text>
+        <text x="${svgW-10}" y="38" text-anchor="end" font-size="14" font-weight="700" fill="#15803d">사용 ${used.toLocaleString()} mm</text>
+        <text x="${svgW-10}" y="58" text-anchor="end" font-size="14" font-weight="700" fill="#d97706">남음 ${remain.toLocaleString()} mm</text>
+        <text x="${(filmX+rollW/2).toFixed(2)}" y="${Math.max(topH+30,usedY-8)}" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">재단 끝 (${used.toLocaleString()} mm)</text>
+        <text x="${(filmX+rollW/2).toFixed(2)}" y="${Math.min(totalY-8, usedY+26)}" text-anchor="middle" font-size="13" font-weight="700" fill="#64748b">남은 필름 ${remain.toLocaleString()} mm</text>
+        <text x="${(filmX+rollW/2).toFixed(2)}" y="${totalY+22}" text-anchor="middle" font-size="13" fill="#475569">필름 끝 · ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm</text>
       </g>
     </svg>`;
 
