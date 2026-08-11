@@ -276,6 +276,12 @@ document.getElementById('plus').onclick=()=>{zoom=Math.min(3,zoom*1.25);draw();}
 document.getElementById('minus').onclick=()=>{zoom=Math.max(.5,zoom/1.25);draw();};
 
 document.getElementById('add').onclick=()=>{addPiece();saveLocal();};
+document.getElementById('calc').onclick=()=>{
+  const btn=document.getElementById('calc');
+  const oldText=btn.textContent;
+  btn.textContent='계산 중...';
+  try { calc(); } finally { btn.textContent=oldText; }
+};
 
 document.getElementById('saveDetails').onclick=()=>{
   const stock=document.getElementById('stock').value;
