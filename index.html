@@ -240,162 +240,130 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   }
 
 
-  // 사람이 실제로 재단하기 편하도록 "품목 묶음 + 폭 우선"으로 배치합니다.
-  // 1) 같은 품목/같은 치수는 최대한 연속해서 배치
-  // 2) 폭이 넓은 품목부터 우선
-  // 3) 같은 폭이라면 길이가 긴 품목부터 우선
-  // 4) 남는 공간에는 폭이 좁고 긴 품목이 먼저 들어가도록 합니다.
-  // 솔리드 모드에서는 회전 후보도 허용하되, 기본 방향을 먼저 시도합니다.
+  // 로스 최소화를 최우선으로 하면서, 같은 품목은 가능한 한 연속해서
+  // 보이도록 배치합니다. "품목 묶기"가 로스를 악화시키는 경우에는
+  // 묶음보다 필름 활용을 우선합니다.
   function pack(items, filmW, filmL, allowRotation=false){
+    const keyOf=i=>`${i.name}\u0000${i.w}\u0000${i.h}`;
     const area=i=>i.w*i.h;
 
-    // 같은 품목을 하나의 그룹으로 묶습니다. 이름이 같고 치수가 같은 경우
-    // 하나의 "재단 묶음"으로 취급하여 계산 순서가 흩어지지 않게 합니다.
     const groups=[];
     const gm=new Map();
     for(const it of items){
-      const key=`${it.name}\u0000${it.w}\u0000${it.h}`;
-      if(!gm.has(key)){
-        const g={key,name:it.name,w:it.w,h:it.h,items:[],area:0};
-        gm.set(key,g); groups.push(g);
-      }
-      const g=gm.get(key);
-      g.items.push(it);
-      g.area+=area(it);
+      const key=keyOf(it);
+      if(!gm.has(key)) gm.set(key,{key,name:it.name,w:it.w,h:it.h,items:[],area:0});
+      const g=gm.get(key); g.items.push(it); g.area+=area(it);
     }
-
-    // 폭이 넓은 품목을 먼저. 같은 폭에서는 길이가 긴 품목을 먼저.
-    // 면적을 마지막 보조 기준으로 사용합니다.
-    groups.sort((a,b)=>
-      b.w-a.w || b.h-a.h || b.area-a.area || a.name.localeCompare(b.name,'ko')
-    );
+    groups.push(...gm.values());
 
     function intersects(a,b){
-      return !(a.x>=b.x+b.w || a.x+a.w<=b.x ||
-               a.y>=b.y+b.h || a.y+a.h<=b.y);
+      return !(a.x>=b.x+b.w || a.x+a.w<=b.x || a.y>=b.y+b.h || a.y+a.h<=b.y);
     }
-
     function contains(a,b){
-      return a.x<=b.x && a.y<=b.y &&
-             a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
+      return a.x<=b.x && a.y<=b.y && a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
     }
-
     function prune(rects){
       const out=[];
       for(let i=0;i<rects.length;i++){
-        const r=rects[i];
-        if(r.w<=0||r.h<=0) continue;
-        let bad=false;
-        for(let j=0;j<rects.length;j++){
-          if(i===j) continue;
-          if(contains(rects[j],r)){bad=true;break;}
-        }
-        if(!bad) out.push(r);
+        const r=rects[i]; if(r.w<=0||r.h<=0) continue;
+        let covered=false;
+        for(let j=0;j<rects.length;j++) if(i!==j && contains(rects[j],r)){covered=true;break;}
+        if(!covered) out.push(r);
       }
-      return out;
+      // 같은 크기의 자유영역 중복 제거
+      const seen=new Set();
+      return out.filter(r=>{const k=`${r.x}|${r.y}|${r.w}|${r.h}`;if(seen.has(k))return false;seen.add(k);return true;});
     }
 
-    // 한 번의 계산만 하지 않고 몇 가지 "그룹 우선순위"를 시도합니다.
-    // 품목 연속성을 유지하면서 길이 사용량이 가장 적은 결과를 선택합니다.
-    const groupOrders=[];
-    groupOrders.push([...groups]);
-    groupOrders.push([...groups].sort((a,b)=>b.w-a.w||b.h-a.h));
-    groupOrders.push([...groups].sort((a,b)=>b.h-a.h||b.w-a.w));
-    groupOrders.push([...groups].sort((a,b)=>b.w*a.h-a.w*b.h||b.w-a.w));
+    // 여러 순서를 시험합니다. 첫 번째는 폭 우선(사용자 요구),
+    // 이후에는 길이/면적/폭+길이 혼합을 시험하여 로스가 더 적은 결과를 찾습니다.
+    const orders=[];
+    const makeOrder=(gs, mode)=>{
+      const sorted=[...gs].sort((a,b)=>{
+        if(mode===0) return b.w-a.w || b.h-a.h || b.area-a.area;
+        if(mode===1) return b.h-a.h || b.w-a.w || b.area-a.area;
+        if(mode===2) return b.area-a.area || b.w-a.w || b.h-a.h;
+        if(mode===3) return Math.max(b.w,b.h)-Math.max(a.w,a.h) || b.area-a.area;
+        return (b.w*b.h)-(a.w*a.h) || b.w-a.w;
+      });
+      const out=[]; for(const g of sorted) out.push(...g.items); return out;
+    };
+    for(let m=0;m<5;m++) orders.push(makeOrder(groups,m));
+
+    // 그룹을 폭 우선으로 보되, 작은 폭이 큰 부재 옆의 빈 공간에 들어갈 수 있도록
+    // "다음에 들어갈 수 있는 품목"을 조금씩 앞당기는 보조 순서도 시험합니다.
+    const greedy=[...groups].sort((a,b)=>b.w-a.w||b.h-a.h);
+    const greedyItems=[];
+    const remaining=greedy.map(g=>({g,n:g.items.length}));
+    while(remaining.some(x=>x.n>0)){
+      let pick=remaining.filter(x=>x.n>0).sort((a,b)=>b.g.w-a.g.w||b.g.h-a.g.h)[0];
+      greedyItems.push(pick.g.items[pick.g.items.length-pick.n]); pick.n--;
+      // 폭이 큰 그룹을 계속 이어가되, 현재 그룹이 반복되면 다른 폭을 가진 그룹도
+      // 후보로 남겨둡니다. 실제 배치는 자유영역 점수로 결정됩니다.
+    }
+    orders.push(greedyItems);
 
     let best=null;
-
-    for(const groupOrder of groupOrders){
-      const order=[];
-      for(const g of groupOrder){
-        // 같은 품목은 반드시 한 덩어리로 순서대로 넣습니다.
-        // 그룹 안에서도 원래 입력 순서를 유지합니다.
-        order.push(...g.items);
-      }
-
+    for(const order of orders){
       let free=[{x:0,y:0,w:filmW,h:filmL}];
       const placed=[];
       let failed=false;
-      let sequenceBreaks=0;
-      let previousKey=null;
+      let previousKey=null, sequenceBreaks=0;
 
-      for(const it of order){
-        let chosen=null;
+      for(let idx=0;idx<order.length;idx++){
+        const it=order[idx], currentKey=keyOf(it);
         const orientations=allowRotation && it.w!==it.h
           ? [[it.w,it.h,0],[it.h,it.w,90]]
           : [[it.w,it.h,0]];
 
+        let chosen=null;
         for(const fr of free){
           for(const [pw,ph,rot] of orientations){
             if(pw>fr.w || ph>fr.h) continue;
-
-            const leftoverW=fr.w-pw;
-            const leftoverH=fr.h-ph;
-            const sameAsPrev=previousKey===`${it.name}\u0000${it.w}\u0000${it.h}`;
-
-            // 핵심: 가능한 경우 아래쪽으로 내려가기보다 현재 재단선(y)을
-            // 유지하고, 왼쪽부터 붙여서 사람이 보기 쉬운 연속 블록을 만듭니다.
-            // 그 다음 폭 낭비, 길이 낭비 순으로 평가합니다.
-            const score=[
-              fr.y,
-              sameAsPrev ? 0 : 1,
-              leftoverW,
-              leftoverH,
-              fr.x,
-              rot
-            ];
-
-            if(!chosen || score.some((v,i)=>
-              v < chosen.score[i] || (v===chosen.score[i] && false)
-            )){
+            const same=previousKey===currentKey;
+            // 가장 중요한 값은 실제로 새로 늘어나는 필름 길이.
+            // 그 다음은 현재 자유영역을 얼마나 잘 채우는지, 마지막으로 품목 연속성.
+            const newY=fr.y+ph;
+            const shortSide=Math.min(fr.w-pw,fr.h-ph);
+            const areaWaste=Math.max(0,fr.w*fr.h-pw*ph);
+            const score=[newY, areaWaste, same?0:1, fr.y, fr.x, rot];
+            if(!chosen || score.some((v,i)=>v<chosen.score[i])){
               chosen={x:fr.x,y:fr.y,w:pw,h:ph,rot,score};
             }
           }
         }
-
         if(!chosen){failed=true;break;}
 
-        const currentKey=`${it.name}\u0000${it.w}\u0000${it.h}`;
         if(previousKey!==null && previousKey!==currentKey) sequenceBreaks++;
         previousKey=currentKey;
         placed.push({...it,...chosen});
 
         const newFree=[];
         for(const fr of free){
-          if(!intersects(chosen,fr)){
-            newFree.push(fr); continue;
-          }
-          if(chosen.x>fr.x)
-            newFree.push({x:fr.x,y:fr.y,w:chosen.x-fr.x,h:fr.h});
+          if(!intersects(chosen,fr)){newFree.push(fr);continue;}
+          if(chosen.x>fr.x) newFree.push({x:fr.x,y:fr.y,w:chosen.x-fr.x,h:fr.h});
           if(chosen.x+chosen.w<fr.x+fr.w)
-            newFree.push({x:chosen.x+chosen.w,y:fr.y,
-              w:fr.x+fr.w-(chosen.x+chosen.w),h:fr.h});
-          if(chosen.y>fr.y)
-            newFree.push({x:fr.x,y:fr.y,w:fr.w,h:chosen.y-fr.y});
+            newFree.push({x:chosen.x+chosen.w,y:fr.y,w:fr.x+fr.w-(chosen.x+chosen.w),h:fr.h});
+          if(chosen.y>fr.y) newFree.push({x:fr.x,y:fr.y,w:fr.w,h:chosen.y-fr.y});
           if(chosen.y+chosen.h<fr.y+fr.h)
-            newFree.push({x:fr.x,y:chosen.y+chosen.h,w:fr.w,
-              h:fr.y+fr.h-(chosen.y+chosen.h)});
+            newFree.push({x:fr.x,y:chosen.y+chosen.h,w:fr.w,h:fr.y+fr.h-(chosen.y+chosen.h)});
         }
         free=prune(newFree);
       }
-
       if(failed) continue;
 
       const used=placed.reduce((m,p)=>Math.max(m,p.y+p.h),0);
       const partArea=placed.reduce((s,p)=>s+p.w*p.h,0);
       const wasteArea=Math.max(0,used*filmW-partArea);
-
-      // 길이 사용량을 최우선으로 하되, 거의 같은 길이라면
-      // 품목이 흩어지는 결과보다 연속 블록을 선호합니다.
-      // sequenceBreaks는 계산 안정성을 위한 보조 점수입니다.
-      const score=[used, sequenceBreaks, wasteArea];
+      // 로스(사용 길이)를 절대 우선. 로스가 같거나 아주 가까울 때만
+      // 같은 품목이 연속되는 결과를 선택합니다.
+      const score=[used, wasteArea, sequenceBreaks];
       if(!best || score[0]<best.score[0] ||
         (score[0]===best.score[0] && score[1]<best.score[1]) ||
         (score[0]===best.score[0] && score[1]===best.score[1] && score[2]<best.score[2])){
         best={placed,maxY:used,area:partArea,score};
       }
     }
-
     return best;
   }
 
