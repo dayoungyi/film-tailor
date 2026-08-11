@@ -330,10 +330,27 @@ function sizeColor(key){
   return `hsl(${hue.toFixed(0)},62%,88%)`;
 }
 function fitFont(text, maxWidth, maxHeight, maxSize, minSize){
+  // iPhone Safari의 SVG 글꼴 폭이 PC Chrome보다 크게 계산되는 경우를 대비해
+  // 실제 사용 가능한 폭의 80%만 사용합니다. 글자를 가로로 찌그러뜨리지는 않습니다.
   const chars=[...text].length;
-  const byWidth=maxWidth/Math.max(1,chars*0.62);
-  const byHeight=maxHeight;
+  const byWidth=(maxWidth*.80)/Math.max(1,chars*0.62);
+  const byHeight=maxHeight*.82;
   return Math.max(minSize,Math.min(maxSize,byWidth,byHeight));
+}
+function fitNameFont(text, maxWidth, maxHeight, maxSize, minSize){
+  const chars=[...text].length;
+  const byWidth=(maxWidth*.78)/Math.max(1,chars*1.02);
+  const byHeight=maxHeight*.82;
+  return Math.max(minSize,Math.min(maxSize,byWidth,byHeight));
+}
+function dimLines(w,h,maxWidth,maxSize,minSize){
+  const one=`${mm(w)} × ${mm(h)}`;
+  // 폭이 좁은 부재는 두 줄로 표시해서 Safari에서도 치수가 잘리지 않게 합니다.
+  const oneSize=fitFont(one,maxWidth,999,maxSize,minSize);
+  if(oneSize>=minSize+1) return {lines:[one],size:oneSize};
+  const a=mm(w), b=`× ${mm(h)}`;
+  const twoSize=fitFont(Math.max(a.length,b.length)?a+' '+b:'',maxWidth,999,maxSize,minSize);
+  return {lines:[a,b],size:Math.max(minSize,twoSize)};
 }
 
 function draw(){
@@ -344,9 +361,9 @@ function draw(){
   const filmW=stock*scale, filmH=len*scale;
   const W=Math.ceil(left+filmW+right),H=Math.ceil(top+filmH+bottom);
 
-  let s=`<svg id="layoutSvg" xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  let s=`<svg id="layoutSvg" xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif">
   <rect width="100%" height="100%" fill="#fff"/>
-  <text x="${left+filmW/2}" y="24" text-anchor="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="16" font-weight="700" fill="#333">필름 폭 ${mm(stock)} mm</text>
+  <text x="${left+filmW/2}" y="24" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif" font-size="16" font-weight="700" fill="#333">필름 폭 ${mm(stock)} mm</text>
   <line x1="${left}" y1="38" x2="${left+filmW}" y2="38" stroke="#555"/>
   <polygon points="${left},38 ${left+8},34 ${left+8},42" fill="#555"/>
   <polygon points="${left+filmW},38 ${left+filmW-8},34 ${left+filmW-8},42" fill="#555"/>
@@ -355,42 +372,49 @@ function draw(){
   placed.forEach((p,i)=>{
     const x=left+p.x*scale,y=top+p.y*scale,w=p.w*scale,h=p.h*scale;
     const color=sizeColor(sizeKey(p));
-    const id=`clip${i}`;
-    s+=`<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${Math.max(1,w)}" height="${Math.max(1,h)}"/></clipPath></defs>`;
     s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#222" stroke-width="1"/>`;
 
     const cx=x+w/2,cy=y+h/2;
-    const dimText=`${mm(p.w)} × ${mm(p.h)}`;
-    const nameText=p.name;
-
-    // 사각형 안쪽 여백을 확보하고, 치수 글자가 반드시 폭/높이 안에 들어오도록 자동 축소
-    const padX=Math.max(4,Math.min(12,w*.08));
-    const padY=Math.max(3,Math.min(10,h*.08));
+    const padX=Math.max(5,Math.min(14,w*.10));
+    const padY=Math.max(4,Math.min(12,h*.10));
     const availW=Math.max(12,w-padX*2);
     const availH=Math.max(12,h-padY*2);
+    const fontFamily="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif";
 
     if(w>=48 && h>=42){
-      const dimSize=fitFont(dimText,availW,Math.max(12,availH*.42),30,8);
-      // 부재명은 실제 글자 폭을 SVG가 강제로 사각형 안에 맞추도록 함
-      // (한글은 폰트마다 실제 폭이 달라 기존 계산만으로는 잘릴 수 있음)
-      const nameSize=Math.max(8,Math.min(16,availH*.25));
-      const total=nameSize+dimSize+Math.max(3,dimSize*.18);
-      if(total<=availH && dimSize>=8){
-        const gap=Math.max(3,dimSize*.18);
-        const nameY=cy-(dimSize/2+gap/2);
-        const dimY=cy+(nameSize/2+gap/2);
-        const nameWidth=Math.max(8,availW);
-        s+=`<g clip-path="url(#${id})" font-family="Arial,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#111">`;
-        s+=`<text x="${cx}" y="${nameY}" dominant-baseline="middle" font-size="${nameSize}" font-weight="700" textLength="${nameWidth}" lengthAdjust="spacingAndGlyphs">${esc(nameText)}</text>`;
-        s+=`<text x="${cx}" y="${dimY}" dominant-baseline="middle" font-size="${dimSize}" font-weight="800">${dimText}</text></g>`;
+      const nameSize=fitNameFont(p.name,availW,availH*.32,16,7);
+      const d=dimLines(p.w,p.h,availW,30,7);
+      const dimSize=d.size;
+      const gap=Math.max(4,dimSize*.22);
+      const dimBlockH=d.lines.length*dimSize*1.05;
+      const total=nameSize+gap+dimBlockH;
+      if(total<=availH && nameSize>=7 && dimSize>=7){
+        const nameY=cy-total/2+nameSize/2;
+        s+=`<g font-family="${fontFamily}" text-anchor="middle" fill="#111" overflow="visible">`;
+        s+=`<text x="${cx}" y="${nameY}" font-size="${nameSize}" font-weight="700">${esc(p.name)}</text>`;
+        const firstY=nameY+nameSize/2+gap+dimSize*.75;
+        if(d.lines.length===1){
+          s+=`<text x="${cx}" y="${firstY}" font-size="${dimSize}" font-weight="800">${esc(d.lines[0])}</text>`;
+        }else{
+          s+=`<text x="${cx}" y="${firstY}" font-size="${dimSize}" font-weight="800">`+
+             d.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?dimSize*1.05:0}">${esc(line)}</tspan>`).join('')+`</text>`;
+        }
+        s+=`</g>`;
       }else{
-        const dimSize2=fitFont(dimText,availW,availH,30,7);
-        s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${dimSize2}" font-weight="800" fill="#111">${dimText}</text>`;
+        const d2=dimLines(p.w,p.h,availW,24,6);
+        const fs=d2.size;
+        s+=`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">`+
+           (d2.lines.length===1?esc(d2.lines[0]):d2.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?fs*1.05:(1-d2.lines.length)*fs*.5}">${esc(line)}</tspan>`).join(''))+`</text>`;
       }
     }else if(w>=28 && h>=20){
-      const dimSize=fitFont(dimText,availW,availH,18,6);
-      if(dimSize>=6){
-        s+=`<text clip-path="url(#${id})" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="${dimSize}" font-weight="800" fill="#111">${dimText}</text>`;
+      const d=dimLines(p.w,p.h,availW,18,5);
+      const fs=d.size;
+      if(d.lines.length===1){
+        s+=`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">${esc(d.lines[0])}</text>`;
+      }else{
+        const start=cy-(d.lines.length-1)*fs*.52;
+        s+=`<text x="${cx}" y="${start}" text-anchor="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">`+
+           d.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?fs*1.05:0}">${esc(line)}</tspan>`).join('')+`</text>`;
       }
     }
   });
@@ -399,10 +423,10 @@ function draw(){
   const remain=Math.max(0,len-used);
   const rx=left+filmW+25;
   s+=`<line x1="${rx}" y1="${top}" x2="${rx}" y2="${top+filmH}" stroke="#777"/>
-  <text x="${rx+10}" y="${top+18}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#374151">전체 ${mm(len)} mm</text>
-  <text x="${rx+10}" y="${top+40}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#166534">사용 ${mm(used)} mm</text>
-  <text x="${rx+10}" y="${top+62}" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" font-weight="700" fill="#d97706">잔여 ${mm(remain)} mm</text>
-  <text x="${left+filmW/2}" y="${top+filmH+30}" text-anchor="middle" font-family="Arial,'Noto Sans KR',sans-serif" font-size="13" fill="#374151">전체 필름 길이 ${mm(len)} mm</text>
+  <text x="${rx+10}" y="${top+18}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#374151">전체 ${mm(len)} mm</text>
+  <text x="${rx+10}" y="${top+40}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#166534">사용 ${mm(used)} mm</text>
+  <text x="${rx+10}" y="${top+62}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#d97706">잔여 ${mm(remain)} mm</text>
+  <text x="${left+filmW/2}" y="${top+filmH+30}" text-anchor="middle" font-family="${fontFamily}" font-size="13" fill="#374151">전체 필름 길이 ${mm(len)} mm</text>
   </svg>`;
   svgHost.innerHTML=s;
   zoomText.textContent=Math.round(zoom*100)+'%';
