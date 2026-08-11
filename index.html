@@ -110,13 +110,20 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     });
     return items;
   }
-  const STORAGE_KEY='filmTailorV12';
-  const OLD_KEYS=['filmTailorV11','filmTailorV10','filmTailorV9','filmTailorV8','filmTailorV7','filmTailorV6','filmTailorV5','filmTailorV4','filmTailorV3','filmTailor'];
+  // Permanent storage key: future versions keep using this key so
+  // replacing index.html on GitHub Pages does not erase saved measurements.
+  const STORAGE_KEY='filmTailorSavedData';
+  const LEGACY_KEYS=[
+    'filmTailorV12','filmTailorV11','filmTailorV10','filmTailorV9',
+    'filmTailorV8','filmTailorV7','filmTailorV6','filmTailorV5',
+    'filmTailorV4','filmTailorV3','filmTailor','filmTailorBackup'
+  ];
   let loading=false;
 
   function collectData(){
     return {
-      version:12,
+      version:15,
+      savedAt:Date.now(),
       filmW:$('filmW').value || '1220',
       filmL:$('filmL').value || '50000',
       rows:[...rowsEl.querySelectorAll('.row')].map(r=>({
@@ -128,56 +135,71 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     };
   }
 
+  function writeStorage(data){
+    const raw=JSON.stringify(data);
+    try{ localStorage.setItem(STORAGE_KEY,raw); }catch(e){}
+    // Keep a second local backup under a different key.
+    try{ localStorage.setItem('filmTailorSavedBackup',raw); }catch(e){}
+  }
+
   function saveLocal(){
     if(loading) return;
-    try{
-      const data=collectData();
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
-      // Keep a backup copy so a browser/cache issue cannot wipe the inputs.
-      localStorage.setItem('filmTailorBackup',JSON.stringify(data));
-    }catch(e){}
+    try{ writeStorage(collectData()); }catch(e){}
+  }
+
+  function readSavedData(){
+    const keys=[STORAGE_KEY,'filmTailorSavedBackup',...LEGACY_KEYS];
+    const candidates=[];
+    for(const key of keys){
+      try{
+        const raw=localStorage.getItem(key);
+        if(!raw) continue;
+        const d=JSON.parse(raw);
+        if(d && Array.isArray(d.rows)){
+          candidates.push(d);
+        }
+      }catch(e){}
+    }
+    if(!candidates.length) return null;
+
+    // Prefer the newest valid copy. This prevents a newer empty/default
+    // record from overwriting an older record that still has the user's rows.
+    candidates.sort((a,b)=>(Number(b.savedAt)||0)-(Number(a.savedAt)||0));
+    return candidates[0];
+  }
+
+  function makeRow(data){
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML=`<input class="name" placeholder="부재명" value="${esc(data.name||'')}">
+      <input class="w" type="number" min="1" placeholder="가로" value="${data.w||''}">
+      <input class="h" type="number" min="1" placeholder="세로" value="${data.h||''}">
+      <input class="qty" type="number" min="1" value="${data.qty||1}">
+      <button class="btn-x" type="button">×</button>`;
+    r.querySelector('.btn-x').onclick=()=>{r.remove();saveLocal();};
+    r.querySelectorAll('input').forEach(i=>i.addEventListener('input',saveLocal));
+    return r;
   }
 
   function loadLocal(){
     loading=true;
-    let d=null;
-    const keys=[STORAGE_KEY,...OLD_KEYS,'filmTailorBackup'];
-    for(const key of keys){
-      try{
-        const raw=localStorage.getItem(key);
-        if(raw){
-          const parsed=JSON.parse(raw);
-          if(parsed && Array.isArray(parsed.rows)){ d=parsed; break; }
-        }
-      }catch(e){}
-    }
-
+    const d=readSavedData();
     rowsEl.innerHTML='';
-    if(d){
+
+    if(d && d.rows.length){
       $('filmW').value=d.filmW||1220;
       $('filmL').value=d.filmL||50000;
-      (d.rows||[]).forEach(x=>{
-        const r=document.createElement('div'); r.className='row';
-        r.innerHTML=`<input class="name" placeholder="부재명" value="${esc(x.name||'')}">
-          <input class="w" type="number" min="1" placeholder="가로" value="${x.w||''}">
-          <input class="h" type="number" min="1" placeholder="세로" value="${x.h||''}">
-          <input class="qty" type="number" min="1" value="${x.qty||1}">
-          <button class="btn-x" type="button">×</button>`;
-        r.querySelector('.btn-x').onclick=()=>{r.remove();saveLocal();};
-        r.querySelectorAll('input').forEach(i=>i.addEventListener('input',saveLocal));
-        rowsEl.appendChild(r);
-      });
-    } else {
-      const r=document.createElement('div'); r.className='row';
-      r.innerHTML=`<input class="name" placeholder="부재명" value="문짝">
-        <input class="w" type="number" min="1" placeholder="가로" value="850">
-        <input class="h" type="number" min="1" placeholder="세로" value="2000">
-        <input class="qty" type="number" min="1" value="1">
-        <button class="btn-x" type="button">×</button>`;
-      r.querySelector('.btn-x').onclick=()=>{r.remove();saveLocal();};
-      r.querySelectorAll('input').forEach(i=>i.addEventListener('input',saveLocal));
-      rowsEl.appendChild(r);
+      d.rows.forEach(x=>rowsEl.appendChild(makeRow(x)));
+
+      // Immediately migrate old data to the permanent key.
+      loading=false;
+      writeStorage(collectData());
+      return;
     }
+
+    // No saved data at all: start with one blank/default row.
+    $('filmW').value='1220';
+    $('filmL').value='50000';
+    rowsEl.appendChild(makeRow({name:'문짝',w:850,h:2000,qty:1}));
     loading=false;
     saveLocal();
   }
@@ -436,7 +458,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   function clearAll(){
     if(!confirm('입력한 부재와 필름 정보를 모두 삭제할까요?'))return;
-    [STORAGE_KEY,...OLD_KEYS,'filmTailorBackup'].forEach(k=>localStorage.removeItem(k));
+    [STORAGE_KEY,'filmTailorSavedBackup',...LEGACY_KEYS].forEach(k=>localStorage.removeItem(k));
     rowsEl.innerHTML='';$('summary').textContent='부재를 입력하고 배치 계산을 눌러주세요.';$('svgHost').innerHTML='<div class="placeholder">계산 결과가 여기에 표시됩니다.</div>';lastResult=null;
   }
 
@@ -448,6 +470,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   $('filmW').addEventListener('input',saveLocal);
   $('filmL').addEventListener('input',saveLocal);
   window.addEventListener('beforeunload',saveLocal);
+  window.addEventListener('pagehide',saveLocal);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveLocal();});
   $('minusBtn').onclick=()=>{zoom=Math.max(.5,zoom-.1);applyZoom()};
   $('plusBtn').onclick=()=>{zoom=Math.min(2,zoom+.1);applyZoom()};
