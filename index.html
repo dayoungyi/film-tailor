@@ -3,516 +3,320 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111827">
 <title>필름 재단 배치 계산기</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#f4f5f7;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif}
-.app{max-width:1100px;margin:auto;padding:18px 14px 40px}
-.head{margin-bottom:14px}.head h1{font-size:24px;margin:0 0 5px}.head p{margin:0;color:#6b7280;font-size:14px}
-.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px #00000008}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:560px}
-.field label{display:block;font-size:12px;color:#6b7280;margin-bottom:5px}
-.field input{width:100%;padding:11px 10px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
-.rowhead,.piece{display:grid;grid-template-columns:1.45fr 1fr 1fr .65fr 42px;gap:7px;align-items:center}
-.rowhead{font-size:12px;color:#6b7280;padding:0 4px 6px}.piece{margin-bottom:7px}
-.piece input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:9px;font-size:15px}
-.del{border:0;background:#f3f4f6;border-radius:9px;height:40px;font-size:18px;cursor:pointer}
+body{margin:0;background:#f3f5f7;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:18px}
+h1{margin:0 0 6px;font-size:28px}
+.sub{color:#64748b;margin-bottom:18px}
+.card{background:#fff;border:1px solid #dfe4ea;border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 2px 8px #00000008}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;color:#64748b;font-size:13px;margin-bottom:5px}
+input{width:100%;height:42px;border:1px solid #cbd5e1;border-radius:9px;padding:0 12px;font-size:16px;background:#fff}
+.rows-head,.row{display:grid;grid-template-columns:2fr 1.35fr 1.35fr 1fr 44px;gap:7px;align-items:center}
+.rows-head{color:#64748b;font-size:13px;margin-bottom:5px}
+.row{margin-bottom:7px}
+button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:14px;cursor:pointer}
+.btn-add{background:#eef2f7}.btn-save{background:#2456d6;color:#fff}.btn-calc{background:#0f172a;color:#fff}.btn-jpeg{background:#16803c;color:#fff}.btn-clear{background:#e9eef3}.btn-x{background:#f1f3f5;padding:9px 12px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:0;border-radius:11px;padding:12px 15px;font-weight:700;font-size:15px;background:#111827;color:#fff;cursor:pointer}
-.btn.secondary{background:#eef0f3;color:#111827}.btn.green{background:#166534}.btn.blue{background:#1d4ed8}
-.result{font-weight:700;font-size:15px;margin-bottom:10px;line-height:1.5}
-.viewer-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.zoom-label{font-size:13px;color:#4b5563;font-weight:700}.zoom-btn{border:1px solid #d1d5db;background:#fff;border-radius:9px;padding:8px 11px;font-weight:700;cursor:pointer}
-.canvaswrap{height:min(78vh,900px);min-height:420px;overflow:auto;border-radius:12px;background:#eef1f5;border:1px solid #e5e7eb;padding:16px;text-align:center;-webkit-overflow-scrolling:touch}
-#svgHost{display:inline-block;text-align:left;vertical-align:top;background:#fff;box-shadow:0 1px 4px #0001}
-#layoutSvg{display:block;background:#fff}
-.hint{font-size:12px;color:#6b7280;margin-top:8px;line-height:1.5}
-.save-note{font-size:12px;color:#6b7280;margin-top:8px}
-@media(max-width:650px){
- .app{padding:14px 10px}.head h1{font-size:21px}.rowhead,.piece{grid-template-columns:1.35fr 1fr 1fr .65fr 38px}
- .piece input{font-size:14px;padding:9px 7px}.btn{flex:1;min-width:130px}
- .canvaswrap{height:72vh;min-height:380px;padding:10px}
+.note{font-size:12px;color:#64748b;margin-top:8px}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolbar button{padding:8px 12px;background:#fff;border:1px solid #cbd5e1}
+.summary{font-weight:700;margin:10px 0}
+.viewer{height:760px;overflow:auto;background:#eef2f6;border:1px solid #dce2e8;border-radius:10px;padding:24px;display:flex;justify-content:center;align-items:flex-start}
+#svgHost{background:#fff;flex:none;box-shadow:0 1px 4px #0002}
+.placeholder{color:#0f172a;font-weight:700;padding:25px;text-align:center}
+@media(max-width:700px){
+ .wrap{padding:10px}
+ h1{font-size:22px}
+ .grid2{grid-template-columns:1fr 1fr}
+ .rows-head{display:none}
+ .row{grid-template-columns:1.7fr 1fr 1fr .75fr 40px}
+ .viewer{height:68vh;padding:12px}
 }
 </style>
 </head>
 <body>
-<div class="app">
-<div class="head">
+<div class="wrap">
   <h1>필름 재단 배치 계산기</h1>
-  <p>필름 폭과 길이를 입력하고 실측값을 넣으면 필름 위에 자동으로 배치합니다.</p>
-</div>
+  <div class="sub">필름 폭과 길이를 입력하고 부재를 입력하면 필름 로스를 최소화하도록 자동 배치합니다.</div>
 
-<div class="card">
-  <div class="grid">
-    <div class="field"><label>필름 폭 (mm)</label><input id="stock" type="number" inputmode="decimal" value="1220"></div>
-    <div class="field"><label>필름 길이 (mm)</label><input id="rollLength" type="number" inputmode="decimal" value="50000"></div>
+  <div class="card">
+    <div class="grid2">
+      <div><label>필름 폭 (mm)</label><input id="filmW" type="number" min="1" value="1220"></div>
+      <div><label>필름 길이 (mm)</label><input id="filmL" type="number" min="1" value="50000"></div>
+    </div>
   </div>
-  <div class="hint" id="rollInfo">필름 전체 길이: 50,000 mm (50.0 m)</div>
-</div>
 
-<div class="card">
-  <div class="rowhead"><div>부재명</div><div>가로(mm)</div><div>세로(mm)</div><div>수량</div><div></div></div>
-  <div id="pieces"></div>
-  <div class="actions">
-    <button class="btn secondary" id="add" type="button">＋ 부재 추가</button>
-    <button class="btn blue" id="saveDetails" type="button">▣ 치수내역 저장</button>
+  <div class="card">
+    <div class="rows-head"><div>부재명</div><div>가로(mm)</div><div>세로(mm)</div><div>수량</div><div></div></div>
+    <div id="rows"></div>
+    <div class="actions">
+      <button class="btn-add" id="addBtn">＋ 부재 추가</button>
+      <button class="btn-save" id="saveBtn">▣ 치수내역 저장</button>
+    </div>
+    <div class="note">가로/세로는 실제 재단할 부재 치수입니다. 부재는 90도 회전해서 배치할 수 있습니다.</div>
   </div>
-  <div class="save-note">치수내역은 CSV 파일로 저장되며, 입력값은 이 브라우저에도 자동 저장됩니다.</div>
-</div>
 
-<div class="card">
-  <div class="actions">
-    <button class="btn" id="calc" type="button">★ 재단 배치 계산</button>
-    <button class="btn green" id="save" type="button">JPEG 이미지 저장</button>
-    <button class="btn secondary" id="clear" type="button">전체 삭제</button>
+  <div class="card actions">
+    <button class="btn-calc" id="calcBtn">★ 재단 배치 계산</button>
+    <button class="btn-jpeg" id="jpegBtn">JPEG 이미지 저장</button>
+    <button class="btn-clear" id="clearBtn">전체 삭제</button>
   </div>
-</div>
 
-<div class="card">
-  <div class="viewer-toolbar">
-    <button class="zoom-btn" id="fit" type="button">맞춤</button>
-    <button class="zoom-btn" id="minus" type="button">−</button>
-    <span class="zoom-label" id="zoomText">100%</span>
-    <button class="zoom-btn" id="plus" type="button">＋</button>
-    <span class="zoom-label">※ 50m도 세로로 길게 표시되며 스크롤해서 확인합니다.</span>
+  <div class="card">
+    <div class="toolbar">
+      <button id="fitBtn">맞춤</button><button id="minusBtn">−</button>
+      <span id="zoomText">100%</span><button id="plusBtn">＋</button>
+      <span class="note">※ 50m도 세로로 길게 표시되며 스크롤해서 확인합니다.</span>
+    </div>
+    <div class="summary" id="summary">부재를 입력하고 배치 계산을 눌러주세요.</div>
+    <div class="viewer" id="viewer"><div id="svgHost"><div class="placeholder">계산 결과가 여기에 표시됩니다.</div></div></div>
   </div>
-  <div class="result" id="result">부재를 입력하고 배치 계산을 눌러주세요.</div>
-  <div class="canvaswrap" id="viewer"><div id="svgHost"></div></div>
-</div>
 </div>
 
 <script>
-const piecesEl=document.getElementById('pieces');
-const svgHost=document.getElementById('svgHost');
-const viewer=document.getElementById('viewer');
-const resultEl=document.getElementById('result');
-const zoomText=document.getElementById('zoomText');
-let placed=[], rollLen=0, zoom=1, baseScale=0.45;
+(() => {
+  const $ = id => document.getElementById(id);
+  const rowsEl = $('rows');
+  let zoom = 1;
+  let lastResult = null;
+  let palette = ['#dceeff','#fff0c9','#dff3e5','#eee2ff','#ffe1e1','#dff1f3','#e4edff','#ffebc7','#e2f3dc','#f4ddf0'];
 
-function addPiece(name='',w='',h='',q=1){
-  const d=document.createElement('div');
-  d.className='piece';
-  d.innerHTML=
-    '<input class="pn" placeholder="예: 문짝" value="'+escapeAttr(name)+'">'+
-    '<input class="pw" type="number" inputmode="decimal" placeholder="450" value="'+escapeAttr(w)+'">'+
-    '<input class="ph" type="number" inputmode="decimal" placeholder="720" value="'+escapeAttr(h)+'">'+
-    '<input class="pq" type="number" inputmode="numeric" min="1" placeholder="1" value="'+escapeAttr(q)+'">'+
-    '<button class="del" aria-label="삭제" type="button">×</button>';
-  d.querySelector('.del').onclick=()=>{d.remove();saveLocal();};
-  d.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',saveLocal));
-  piecesEl.appendChild(d);
-}
-function escapeAttr(s){
-  return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function getPieces(){
-  return [...document.querySelectorAll('.piece')].map(x=>({
-    name:x.querySelector('.pn').value.trim()||'부재',
-    w:+x.querySelector('.pw').value,
-    h:+x.querySelector('.ph').value,
-    q:+x.querySelector('.pq').value
-  })).filter(x=>x.w>0&&x.h>0&&x.q>0);
-}
-function esc(s){
-  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function mm(v){return Math.round(v).toLocaleString('ko-KR');}
-
-function saveLocal(){
-  const data={
-    stock:document.getElementById('stock').value,
-    rollLength:document.getElementById('rollLength').value,
-    pieces:[...document.querySelectorAll('.piece')].map(x=>({
-      name:x.querySelector('.pn').value,
-      w:x.querySelector('.pw').value,
-      h:x.querySelector('.ph').value,
-      q:x.querySelector('.pq').value
-    }))
-  };
-  try{localStorage.setItem('filmTailorData',JSON.stringify(data));}catch(e){}
-}
-function loadLocal(){
-  try{
-    const data=JSON.parse(localStorage.getItem('filmTailorData')||'null');
-    if(!data)return false;
-    document.getElementById('stock').value=data.stock||1220;
-    document.getElementById('rollLength').value=data.rollLength||50000;
-    piecesEl.innerHTML='';
-    if(data.pieces?.length)data.pieces.forEach(p=>addPiece(p.name,p.w,p.h,p.q));
-    else addPiece();
-    updateRollInfo();
-    return true;
-  }catch(e){return false}
-}
-
-function updateRollInfo(){
-  const v=+document.getElementById('rollLength').value||0;
-  document.getElementById('rollInfo').textContent=`필름 전체 길이: ${mm(v)} mm (${(v/1000).toFixed(1)} m)`;
-}
-
-
-function rectsOverlap(a,b){
-  return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y);
-}
-function containsRect(a,b){
-  return a.x<=b.x && a.y<=b.y && a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
-}
-
-/* 폭이 고정된 필름을 '높이가 최소가 되는 2D 스트립 패킹'으로 계산합니다.
-   MaxRects 계열의 휴리스틱을 여러 순서/방향으로 반복하고 가장 짧은 사용 길이를 선택합니다.
-   모든 경우의 수를 완전탐색하는 것은 부재가 많을수록 현실적으로 불가능하므로,
-   실사용에서 빠르면서 로스를 크게 줄이는 근사 최적화 방식입니다. */
-function maxRectsPack(items, stock){
-  const totalH=items.reduce((sum,it)=>sum+Math.max(it.w,it.h),0)+1;
-  let free=[{x:0,y:0,w:stock,h:totalH}];
-  const out=[];
-
-  function splitFree(used){
-    const next=[];
-    for(const f of free){
-      if(!rectsOverlap(used,f)){ next.push(f); continue; }
-      const fx2=f.x+f.w, fy2=f.y+f.h, ux2=used.x+used.w, uy2=used.y+used.h;
-      if(used.x>f.x) next.push({x:f.x,y:f.y,w:used.x-f.x,h:f.h});
-      if(ux2<fx2) next.push({x:ux2,y:f.y,w:fx2-ux2,h:f.h});
-      if(used.y>f.y) next.push({x:f.x,y:f.y,w:f.w,h:used.y-f.y});
-      if(uy2<fy2) next.push({x:f.x,y:uy2,w:f.w,h:fy2-uy2});
-    }
-    // 작은/중복 자유영역 제거
-    const clean=[];
-    for(let i=0;i<next.length;i++){
-      const a=next[i];
-      if(a.w<=0.0001||a.h<=0.0001) continue;
-      let contained=false;
-      for(let j=0;j<next.length;j++){
-        if(i!==j && containsRect(next[j],a)){contained=true;break;}
-      }
-      if(!contained) clean.push(a);
-    }
-    free=clean;
+  function esc(s){
+    return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
-
-  for(const it of items){
-    let best=null;
-    const rotations=(it.w===it.h)?[false]:[false,true];
-    for(const rot of rotations){
-      const w=rot?it.h:it.w, h=rot?it.w:it.h;
-      if(w>stock) continue;
-      for(const f of free){
-        if(w>f.w || h>f.h) continue;
-        const leftoverH=f.h-h, leftoverW=f.w-w;
-        const short=Math.min(leftoverW,leftoverH);
-        const long=Math.max(leftoverW,leftoverH);
-        const newBottom=Math.max(...out.map(p=>p.y+p.h),0,y=0)+h;
-        // 우선: 필름 전체 사용길이, 그 다음 빈 직사각형의 짧은 변,
-        // 그 다음 긴 변, 그 다음 아래/왼쪽 배치
-        const score=[newBottom,short,long,f.y,f.x];
-        if(!best || score.some((v,i)=>v<best.score[i] || (v===best.score[i]&&false)) &&
-          (function(){
-            for(let i=0;i<score.length;i++){if(score[i]<best.score[i])return true;if(score[i]>best.score[i])return false;}
-            return false;
-          })()){
-          best={x:f.x,y:f.y,w,h,rot,score};
-        }
-      }
-    }
-    if(!best) return null;
-    const placedItem={...it,x:best.x,y:best.y,w:best.w,h:best.h,rot:best.rot};
-    out.push(placedItem);
-    splitFree(placedItem);
+  function addRow(data={name:'',w:'',h:'',qty:1}){
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML=`<input class="name" placeholder="부재명" value="${esc(data.name)}">
+      <input class="w" type="number" min="1" placeholder="가로" value="${data.w}">
+      <input class="h" type="number" min="1" placeholder="세로" value="${data.h}">
+      <input class="qty" type="number" min="1" value="${data.qty}">
+      <button class="btn-x" type="button">×</button>`;
+    r.querySelector('.btn-x').onclick=()=>{r.remove(); saveLocal();};
+    r.querySelectorAll('input').forEach(i=>i.addEventListener('input',saveLocal));
+    rowsEl.appendChild(r);
+    saveLocal();
   }
-  return out;
-}
-function packingUsedLength(arr){
-  return arr && arr.length ? Math.max(...arr.map(p=>p.y+p.h)) : Infinity;
-}
-
-function makeOrders(items){
-  const orders=[];
-  const add=(a)=>orders.push(a.map(x=>({...x})));
-  const area=items.slice().sort((a,b)=>(b.w*b.h)-(a.w*a.h)||Math.max(b.w,b.h)-Math.max(a.w,a.h));
-  add(area);
-  add(items.slice().sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h)||(b.w*b.h)-(a.w*a.h)));
-  add(items.slice().sort((a,b)=>b.h-a.h||b.w-a.w));
-  add(items.slice().sort((a,b)=>b.w-a.w||b.h-a.h));
-  add(items.slice().sort((a,b)=>(b.w+b.h)-(a.w+a.h)||(b.w*b.h)-(a.w*a.h)));
-  add(items.slice().sort((a,b)=>Math.min(b.w,b.h)-Math.min(a.w,a.h)||(b.w*b.h)-(a.w*a.h)));
-
-  // 반복해서 약간 다른 순서를 만들고, 같은 결과가 나오는 순서는 자연스럽게 중복되어도 무방합니다.
-  for(let t=0;t<90;t++){
-    const a=items.slice();
-    // 큰 부재를 우선하되 동률/근접 크기에서는 무작위로 섞음
-    a.sort((x,y)=>{
-      const ax=x.w*x.h, ay=y.w*y.h;
-      const diff=Math.abs(ax-ay)/Math.max(ax,ay);
-      if(diff<0.18) return Math.random()-0.5;
-      return ay-ax;
+  function getItems(){
+    const items=[];
+    [...rowsEl.querySelectorAll('.row')].forEach((r,idx)=>{
+      const name=r.querySelector('.name').value.trim() || `부재 ${idx+1}`;
+      const w=+r.querySelector('.w').value, h=+r.querySelector('.h').value, qty=+r.querySelector('.qty').value;
+      if(w>0&&h>0&&qty>0){
+        for(let n=1;n<=qty;n++) items.push({id:items.length,name,w,h,n,qty});
+      }
     });
-    // 20% 확률로 앞쪽 몇 개를 섞어 다른 배치 구조를 유도
-    if(Math.random()<0.45){
-      const n=Math.min(a.length,8);
-      for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
-    }
-    add(a);
+    return items;
   }
-  return orders;
-}
-
-function calc(){
-  saveLocal();
-  const stock=+document.getElementById('stock').value;
-  const rollLength=+document.getElementById('rollLength').value;
-  if(!(stock>0)||!(rollLength>0)){alert('필름 폭과 필름 길이를 확인하세요.');return;}
-  const pieces=getPieces();
-  if(!pieces.length){alert('부재를 하나 이상 입력하세요.');return;}
-
-  let items=[];
-  pieces.forEach(p=>{
-    for(let i=0;i<p.q;i++)items.push({name:p.name,w:p.w,h:p.h,idx:i+1,total:p.q});
-  });
-  if(items.some(it=>it.w>stock && it.h>stock)){
-    const bad=items.find(it=>it.w>stock&&it.h>stock);
-    alert(`${bad.name} (${mm(bad.w)} × ${mm(bad.h)})는 필름 폭 ${mm(stock)}mm에 들어가지 않습니다.`);
-    return;
+  function saveLocal(){
+    const data={filmW:$('filmW').value,filmL:$('filmL').value,rows:[...rowsEl.querySelectorAll('.row')].map(r=>({
+      name:r.querySelector('.name').value,w:r.querySelector('.w').value,h:r.querySelector('.h').value,qty:r.querySelector('.qty').value
+    }))};
+    localStorage.setItem('filmTailorV11',JSON.stringify(data));
+  }
+  function loadLocal(){
+    try{
+      const d=JSON.parse(localStorage.getItem('filmTailorV11'));
+      if(d){
+        $('filmW').value=d.filmW||1220;$('filmL').value=d.filmL||50000;
+        (d.rows||[]).forEach(x=>addRow(x));
+        if((d.rows||[]).length)return;
+      }
+    }catch(e){}
+    addRow({name:'문짝',w:850,h:2000,qty:1});
   }
 
-  // 최소 사용길이를 1순위로 비교하는 다중 시작 최적화
-  const orders=makeOrders(items);
-  let best=null;
-  for(const order of orders){
-    const packed=maxRectsPack(order,stock);
-    if(!packed) continue;
-    const used=packingUsedLength(packed);
-    const area=stock*used;
-    const itemArea=items.reduce((sum,p)=>sum+p.w*p.h,0);
-    const waste=area-itemArea;
-    if(!best || used<best.used || (used===best.used && waste<best.waste)){
-      best={packed,used,waste};
-    }
-  }
+  // MaxRects-like heuristic: keep free rectangles and choose the placement
+  // that minimizes resulting short-axis waste, then long-axis waste.
+  function pack(items, filmW){
+    const orders=[];
+    const base=[...items];
+    const sorters=[
+      a=>-(Math.max(a.w,a.h)*Math.min(a.w,a.h)),
+      a=>-Math.max(a.w,a.h),
+      a=>-(a.w*a.h),
+      a=>-Math.min(a.w,a.h)
+    ];
+    for(const s of sorters) orders.push([...base].sort(s));
+    for(let k=0;k<4;k++) orders.push([...base].sort(()=>Math.random()-.5));
 
-  if(!best){alert('현재 부재를 필름 폭 안에 배치할 수 없습니다.');return;}
-  const usedLen=best.used;
-  if(usedLen>rollLength){
-    alert(`입력한 필름 길이 ${mm(rollLength)}mm보다 필요한 길이 ${mm(usedLen)}mm가 더 깁니다.`);
-    return;
-  }
-
-  placed=best.packed;
-  rollLen=rollLength;
-  const remain=rollLength-usedLen;
-  const totalArea=items.reduce((sum,p)=>sum+p.w*p.h,0);
-  const usedArea=stock*usedLen;
-  const utilization=usedArea>0?(totalArea/usedArea)*100:0;
-  const waste=Math.max(0,100-utilization);
-
-  resultEl.textContent=
-    `필름: ${mm(stock)} × ${mm(rollLength)} mm  | `+
-    `사용 길이: ${mm(usedLen)} mm  | 남은 길이: ${mm(remain)} mm | `+
-    `부재 ${placed.length}개 | 최소 로스 우선 | `+
-    `재단면적 활용률: ${utilization.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
-
-  updateRollInfo();
-  setFitZoom();
-  draw();
-}
-
-function sizeKey(p){
-  const a=Math.round(p.w), b=Math.round(p.h);
-  return `${Math.min(a,b)}x${Math.max(a,b)}`;
-}
-function sizeColor(key){
-  // 같은 치수는 항상 같은 색, 서로 다른 치수는 가능한 한 서로 다른 색
-  let h=0;
-  for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
-  const hue=(h*137.508)%360;
-  return `hsl(${hue.toFixed(0)},62%,88%)`;
-}
-function fitFont(text, maxWidth, maxHeight, maxSize, minSize){
-  // iPhone Safari의 SVG 글꼴 폭이 PC Chrome보다 크게 계산되는 경우를 대비해
-  // 실제 사용 가능한 폭의 80%만 사용합니다. 글자를 가로로 찌그러뜨리지는 않습니다.
-  const chars=[...text].length;
-  const byWidth=(maxWidth*.80)/Math.max(1,chars*0.62);
-  const byHeight=maxHeight*.82;
-  return Math.max(minSize,Math.min(maxSize,byWidth,byHeight));
-}
-function fitNameFont(text, maxWidth, maxHeight, maxSize, minSize){
-  const chars=[...text].length;
-  const byWidth=(maxWidth*.78)/Math.max(1,chars*1.02);
-  const byHeight=maxHeight*.82;
-  return Math.max(minSize,Math.min(maxSize,byWidth,byHeight));
-}
-function dimLines(w,h,maxWidth,maxSize,minSize){
-  const one=`${mm(w)} × ${mm(h)}`;
-  // 폭이 좁은 부재는 두 줄로 표시해서 Safari에서도 치수가 잘리지 않게 합니다.
-  const oneSize=fitFont(one,maxWidth,999,maxSize,minSize);
-  if(oneSize>=minSize+1) return {lines:[one],size:oneSize};
-  const a=mm(w), b=`× ${mm(h)}`;
-  const twoSize=fitFont(Math.max(a.length,b.length)?a+' '+b:'',maxWidth,999,maxSize,minSize);
-  return {lines:[a,b],size:Math.max(minSize,twoSize)};
-}
-
-function draw(){
-  const stock=+document.getElementById('stock').value||1220;
-  const len=Math.max(+(document.getElementById('rollLength').value)||50000,500);
-  const scale=baseScale*zoom;
-  const left=65,top=55,right=150,bottom=55;
-  const filmW=stock*scale, filmH=len*scale;
-  const W=Math.ceil(left+filmW+right),H=Math.ceil(top+filmH+bottom);
-
-  let s=`<svg id="layoutSvg" xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif">
-  <rect width="100%" height="100%" fill="#fff"/>
-  <text x="${left+filmW/2}" y="24" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif" font-size="16" font-weight="700" fill="#333">필름 폭 ${mm(stock)} mm</text>
-  <line x1="${left}" y1="38" x2="${left+filmW}" y2="38" stroke="#555"/>
-  <polygon points="${left},38 ${left+8},34 ${left+8},42" fill="#555"/>
-  <polygon points="${left+filmW},38 ${left+filmW-8},34 ${left+filmW-8},42" fill="#555"/>
-  <rect x="${left}" y="${top}" width="${filmW}" height="${filmH}" fill="#fff" stroke="#222" stroke-width="2"/>`;
-
-  placed.forEach((p,i)=>{
-    const x=left+p.x*scale,y=top+p.y*scale,w=p.w*scale,h=p.h*scale;
-    const color=sizeColor(sizeKey(p));
-    s+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#222" stroke-width="1"/>`;
-
-    const cx=x+w/2,cy=y+h/2;
-    const padX=Math.max(5,Math.min(14,w*.10));
-    const padY=Math.max(4,Math.min(12,h*.10));
-    const availW=Math.max(12,w-padX*2);
-    const availH=Math.max(12,h-padY*2);
-    const fontFamily="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif";
-
-    if(w>=48 && h>=42){
-      const nameSize=fitNameFont(p.name,availW,availH*.32,16,7);
-      const d=dimLines(p.w,p.h,availW,30,7);
-      const dimSize=d.size;
-      const gap=Math.max(4,dimSize*.22);
-      const dimBlockH=d.lines.length*dimSize*1.05;
-      const total=nameSize+gap+dimBlockH;
-      if(total<=availH && nameSize>=7 && dimSize>=7){
-        const nameY=cy-total/2+nameSize/2;
-        s+=`<g font-family="${fontFamily}" text-anchor="middle" fill="#111" overflow="visible">`;
-        s+=`<text x="${cx}" y="${nameY}" font-size="${nameSize}" font-weight="700">${esc(p.name)}</text>`;
-        const firstY=nameY+nameSize/2+gap+dimSize*.75;
-        if(d.lines.length===1){
-          s+=`<text x="${cx}" y="${firstY}" font-size="${dimSize}" font-weight="800">${esc(d.lines[0])}</text>`;
-        }else{
-          s+=`<text x="${cx}" y="${firstY}" font-size="${dimSize}" font-weight="800">`+
-             d.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?dimSize*1.05:0}">${esc(line)}</tspan>`).join('')+`</text>`;
+    let best=null;
+    for(const order of orders){
+      const placed=[], free=[{x:0,y:0,w:filmW,h:Infinity}];
+      let maxY=0;
+      let ok=true;
+      for(const it of order){
+        let bestPos=null;
+        const orientations = it.w===it.h ? [[it.w,it.h,0]] : [[it.w,it.h,0],[it.h,it.w,1]];
+        for(const fr of free){
+          for(const [pw,ph,rot] of orientations){
+            if(pw<=fr.w && (fr.h===Infinity || ph<=fr.h)){
+              const shortWaste=fr.w-pw;
+              const longWaste=(fr.h===Infinity?0:fr.h-ph);
+              const score=[shortWaste, longWaste, fr.y, fr.x];
+              if(!bestPos || score.join(',')<bestPos.score.join(',')){
+                bestPos={x:fr.x,y:fr.y,w:pw,h:ph,rot,score};
+              }
+            }
+          }
         }
-        s+=`</g>`;
-      }else{
-        const d2=dimLines(p.w,p.h,availW,24,6);
-        const fs=d2.size;
-        s+=`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">`+
-           (d2.lines.length===1?esc(d2.lines[0]):d2.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?fs*1.05:(1-d2.lines.length)*fs*.5}">${esc(line)}</tspan>`).join(''))+`</text>`;
+        if(!bestPos){ok=false;break;}
+        placed.push({...it,...bestPos});
+        maxY=Math.max(maxY,bestPos.y+bestPos.h);
+        // Split free rectangles around the chosen rectangle.
+        const nf=[];
+        for(const fr of free){
+          const inter=!(bestPos.x>=fr.x+fr.w || bestPos.x+bestPos.w<=fr.x ||
+                         bestPos.y>=fr.y+(fr.h===Infinity?Infinity:fr.h) ||
+                         bestPos.y+bestPos.h<=fr.y);
+          if(!inter){nf.push(fr);continue;}
+          if(bestPos.x>fr.x) nf.push({x:fr.x,y:fr.y,w:bestPos.x-fr.x,h:fr.h});
+          if(bestPos.x+bestPos.w<fr.x+fr.w) nf.push({x:bestPos.x+bestPos.w,y:fr.y,w:fr.x+fr.w-(bestPos.x+bestPos.w),h:fr.h});
+          if(bestPos.y>fr.y) nf.push({x:fr.x,y:fr.y,w:fr.w,h:bestPos.y-fr.y});
+          if(fr.h!==Infinity && bestPos.y+bestPos.h<fr.y+fr.h) nf.push({x:fr.x,y:bestPos.y+bestPos.h,w:fr.w,h:fr.y+fr.h-(bestPos.y+bestPos.h)});
+        }
+        // Remove contained free rectangles.
+        const clean=[];
+        for(let i=0;i<nf.length;i++){
+          if(nf[i].w<=0||nf[i].h<=0)continue;
+          let contained=false;
+          for(let j=0;j<nf.length;j++) if(i!==j){
+            const a=nf[i],b=nf[j];
+            if(a.x>=b.x&&a.y>=b.y&&a.x+a.w<=b.x+b.w&&
+              (b.h===Infinity || (a.h!==Infinity&&a.y+a.h<=b.y+b.h))){
+              contained=true;break;
+            }
+          }
+          if(!contained)clean.push(nf[i]);
+        }
+        free.length=0; free.push(...clean);
       }
-    }else if(w>=28 && h>=20){
-      const d=dimLines(p.w,p.h,availW,18,5);
-      const fs=d.size;
-      if(d.lines.length===1){
-        s+=`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">${esc(d.lines[0])}</text>`;
-      }else{
-        const start=cy-(d.lines.length-1)*fs*.52;
-        s+=`<text x="${cx}" y="${start}" text-anchor="middle" font-family="${fontFamily}" font-size="${fs}" font-weight="800" fill="#111">`+
-           d.lines.map((line,j)=>`<tspan x="${cx}" dy="${j?fs*1.05:0}">${esc(line)}</tspan>`).join('')+`</text>`;
+      if(ok){
+        const area=placed.reduce((s,p)=>s+p.w*p.h,0);
+        const score=maxY*filmW-area*0.00001;
+        if(!best || maxY<best.maxY || (maxY===best.maxY && score<best.score)) best={placed,maxY,area,score};
       }
     }
-  });
+    return best;
+  }
 
-  const used=placed.length?Math.max(...placed.map(p=>p.y+p.h)):0;
-  const remain=Math.max(0,len-used);
-  const rx=left+filmW+25;
-  s+=`<line x1="${rx}" y1="${top}" x2="${rx}" y2="${top+filmH}" stroke="#777"/>
-  <text x="${rx+10}" y="${top+18}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#374151">전체 ${mm(len)} mm</text>
-  <text x="${rx+10}" y="${top+40}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#166534">사용 ${mm(used)} mm</text>
-  <text x="${rx+10}" y="${top+62}" font-family="${fontFamily}" font-size="13" font-weight="700" fill="#d97706">잔여 ${mm(remain)} mm</text>
-  <text x="${left+filmW/2}" y="${top+filmH+30}" text-anchor="middle" font-family="${fontFamily}" font-size="13" fill="#374151">전체 필름 길이 ${mm(len)} mm</text>
-  </svg>`;
-  svgHost.innerHTML=s;
-  zoomText.textContent=Math.round(zoom*100)+'%';
-}
+  function sizeText(text, maxW, base, min){
+    // Estimate width conservatively; do not horizontally squash text.
+    let size=base;
+    const estimate=t=>[...t].reduce((n,ch)=>n+(ch.charCodeAt(0)>255?1:0.55),0)*size;
+    while(size>min && estimate(text)>maxW) size-=0.5;
+    return Math.max(min,size);
+  }
 
-function setFitZoom(){
-  const stock=+document.getElementById('stock').value||1220;
-  const available=Math.max(260,viewer.clientWidth-30);
-  baseScale=Math.min(.5,available/stock);
-  zoom=1;
-}
-document.getElementById('fit').onclick=()=>{setFitZoom();draw();};
-document.getElementById('plus').onclick=()=>{zoom=Math.min(3,zoom*1.25);draw();};
-document.getElementById('minus').onclick=()=>{zoom=Math.max(.5,zoom/1.25);draw();};
+  function render(result, filmW, filmL){
+    const used=Math.ceil(result.maxY);
+    const svgW=filmW+170, svgH=Math.max(used,1);
+    const scale=0.55; // screen-friendly mm->px base
+    const pxW=svgW*scale, pxH=svgH*scale;
+    const colors=new Map();
+    let ci=0;
+    const keyOf=p=>`${Math.min(p.w,p.h)}x${Math.max(p.w,p.h)}`;
+    let body='';
+    for(const p of result.placed){
+      const key=keyOf(p);
+      if(!colors.has(key)) colors.set(key,palette[ci++%palette.length]);
+      const fill=colors.get(key);
+      const x=p.x*scale, y=p.y*scale, w=p.w*scale, h=p.h*scale;
+      const cx=x+w/2, cy=y+h/2;
+      const dim=`${Math.round(Math.min(p.w,p.h))} × ${Math.round(Math.max(p.w,p.h))}`;
+      const nameSize=sizeText(p.name,Math.max(24,w-14),Math.min(30,Math.max(12,w/9)),8);
+      const dimSize=sizeText(dim,Math.max(28,w-14),Math.min(27,Math.max(11,w/10)),7);
+      let nameY=cy-5, dimY=cy+Math.min(24,h*.14);
+      if(h<70){nameY=cy-8;dimY=cy+12}
+      body+=`<g><rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${fill}" stroke="#222" stroke-width="1"/>
+        <text x="${cx.toFixed(2)}" y="${nameY.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-weight="700" font-size="${nameSize}px">${esc(p.name)}</text>
+        <text x="${cx.toFixed(2)}" y="${dimY.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-weight="800" font-size="${dimSize}px">${dim}</text></g>`;
+    }
+    const svg=`<svg id="resultSvg" xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <text x="${pxW/2}" y="28" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
+      <line x1="20" y1="42" x2="${filmW*scale-20}" y2="42" stroke="#444"/>
+      <g transform="translate(0,52)">${body}</g>
+    </svg>`;
+    $('svgHost').innerHTML=svg;
+    $('svgHost').style.width=pxW+'px';
+    $('svgHost').style.height=(pxH+52)+'px';
+    lastResult={svg:document.getElementById('resultSvg'),used,filmW,filmL,result};
+  }
 
-document.getElementById('add').onclick=()=>{addPiece();saveLocal();};
-document.getElementById('calc').onclick=()=>{
-  const btn=document.getElementById('calc');
-  const oldText=btn.textContent;
-  btn.textContent='계산 중...';
-  try { calc(); } finally { btn.textContent=oldText; }
-};
+  function calculate(){
+    saveLocal();
+    const filmW=+$('filmW').value, filmL=+$('filmL').value, items=getItems();
+    if(!(filmW>0&&filmL>0)){alert('필름 폭과 길이를 입력해주세요.');return;}
+    if(!items.length){alert('부재를 하나 이상 입력해주세요.');return;}
+    const impossible=items.find(i=>Math.min(i.w,i.h)>filmW);
+    if(impossible){alert(`필름 폭 ${filmW}mm에 들어가지 않는 부재가 있습니다: ${impossible.name} (${impossible.w}×${impossible.h})`);return;}
+    const result=pack(items,filmW);
+    if(!result){alert('배치 계산에 실패했습니다.');return;}
+    const used=result.maxY, remain=Math.max(0,filmL-used);
+    const materialArea=used*filmW;
+    const partArea=result.area;
+    const util=materialArea?partArea/materialArea*100:0;
+    const waste=100-util;
+    $('summary').textContent=`필름: ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm | 사용 길이: ${Math.ceil(used).toLocaleString()} mm | 남은 길이: ${Math.max(0,Math.floor(remain)).toLocaleString()} mm | 부재 ${items.length}개 | 최소 로스 우선 | 재단면적 활용률: ${util.toFixed(1)}% | 배치 로스: ${waste.toFixed(1)}%`;
+    render(result,filmW,filmL);
+    lastResult=lastResult||{};
+    lastResult.items=items;
+  }
 
-document.getElementById('saveDetails').onclick=()=>{
-  const stock=document.getElementById('stock').value;
-  const roll=document.getElementById('rollLength').value;
-  const rows=getPieces();
-  if(!rows.length){alert('저장할 치수내역이 없습니다.');return;}
-  const lines=[
-    ['필름 폭(mm)',stock],
-    ['필름 길이(mm)',roll],
-    [],
-    ['부재명','가로(mm)','세로(mm)','수량'],
-    ...rows.map(p=>[p.name,p.w,p.h,p.q])
-  ];
-  const csv='\uFEFF'+lines.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`필름재단_치수내역_${new Date().toISOString().slice(0,10)}.csv`;a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-  saveLocal();
-};
+  function saveCSV(){
+    const rows=[...rowsEl.querySelectorAll('.row')];
+    const lines=[['부재명','가로(mm)','세로(mm)','수량'].join(',')];
+    rows.forEach(r=>{
+      const vals=[r.querySelector('.name').value,r.querySelector('.w').value,r.querySelector('.h').value,r.querySelector('.qty').value];
+      lines.push(vals.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+    });
+    const blob=new Blob(["\ufeff"+lines.join('\\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='필름_재단_치수내역.csv';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }
 
-document.getElementById('save').onclick=async()=>{
-  if(!placed.length){alert('먼저 배치 계산을 해주세요.');return;}
-  const svg=document.getElementById('layoutSvg');
-  const serializer=new XMLSerializer();
-  const svgText=serializer.serializeToString(svg);
-  const blob=new Blob([svgText],{type:'image/svg+xml;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const img=new Image();
-  img.onload=()=>{
-    const maxH=12000,maxW=4000;
-    const scale=Math.min(maxW/svg.width.baseVal.value,maxH/svg.height.baseVal.value,1);
-    const c=document.createElement('canvas');
-    c.width=Math.max(1,Math.floor(svg.width.baseVal.value*scale));
-    c.height=Math.max(1,Math.floor(svg.height.baseVal.value*scale));
-    const cctx=c.getContext('2d');
-    cctx.fillStyle='#fff';cctx.fillRect(0,0,c.width,c.height);
-    cctx.drawImage(img,0,0,c.width,c.height);
-    c.toBlob(b=>{
-      const u=URL.createObjectURL(b);
-      const a=document.createElement('a');a.href=u;a.download='film-cutting-layout.jpg';a.click();
-      setTimeout(()=>URL.revokeObjectURL(u),1000);
-    },'image/jpeg',0.95);
-    URL.revokeObjectURL(url);
-  };
-  img.onerror=()=>{URL.revokeObjectURL(url);alert('JPEG 저장에 실패했습니다. 다시 시도해주세요.');};
-  img.src=url;
-};
+  async function saveJPEG(){
+    if(!lastResult||!lastResult.svg){alert('먼저 재단 배치를 계산해주세요.');return;}
+    const svg=lastResult.svg;
+    const xml=new XMLSerializer().serializeToString(svg);
+    const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');
+      c.width=img.naturalWidth*2;c.height=img.naturalHeight*2;
+      const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0,c.width,c.height);
+      c.toBlob(b=>{
+        const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='필름_재단배치.jpg';a.click();
+        setTimeout(()=>{URL.revokeObjectURL(url);URL.revokeObjectURL(a.href)},1500);
+      },'image/jpeg',0.95);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);alert('JPEG 변환 중 오류가 발생했습니다.');};
+    img.src=url;
+  }
 
-document.getElementById('clear').onclick=()=>{
-  if(!confirm('입력한 부재와 저장된 치수내역을 모두 삭제할까요?'))return;
-  piecesEl.innerHTML='';
-  addPiece();
-  placed=[];rollLen=0;
-  resultEl.textContent='부재를 입력하고 배치 계산을 눌러주세요.';
-  svgHost.innerHTML='';
-  try{localStorage.removeItem('filmTailorData');}catch(e){}
-};
+  function clearAll(){
+    if(!confirm('입력한 부재와 필름 정보를 모두 삭제할까요?'))return;
+    localStorage.removeItem('filmTailorV11');rowsEl.innerHTML='';$('summary').textContent='부재를 입력하고 배치 계산을 눌러주세요.';$('svgHost').innerHTML='<div class="placeholder">계산 결과가 여기에 표시됩니다.</div>';lastResult=null;
+  }
 
-document.getElementById('rollLength').addEventListener('input',()=>{updateRollInfo();saveLocal();});
-document.getElementById('stock').addEventListener('input',()=>{saveLocal();if(placed.length){setFitZoom();draw();}});
+  $('addBtn').onclick=()=>addRow();
+  $('saveBtn').onclick=saveCSV;
+  $('calcBtn').onclick=calculate;
+  $('jpegBtn').onclick=saveJPEG;
+  $('clearBtn').onclick=clearAll;
+  $('filmW').addEventListener('input',saveLocal);$('filmL').addEventListener('input',saveLocal);
+  $('minusBtn').onclick=()=>{zoom=Math.max(.5,zoom-.1);applyZoom()};
+  $('plusBtn').onclick=()=>{zoom=Math.min(2,zoom+.1);applyZoom()};
+  $('fitBtn').onclick=()=>{zoom=1;applyZoom()};
+  function applyZoom(){ $('zoomText').textContent=Math.round(zoom*100)+'%'; $('svgHost').style.transform=`scale(${zoom})`; $('svgHost').style.transformOrigin='top center'; }
 
-if(!loadLocal()) addPiece();
-updateRollInfo();
+  loadLocal();
+})();
 </script>
 </body>
 </html>
