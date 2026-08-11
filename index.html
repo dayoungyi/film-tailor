@@ -385,8 +385,9 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     // This makes the remaining 50m roll area visible at a glance.
     const scale=0.55; // screen-friendly mm->px base
     const topH=64;
-    const sideW=170;
+    const sideW=40;
     const svgW=filmW+sideW;
+    const filmX=20;
     const rollH=Math.max(filmL,used,1)*scale;
     const pxW=svgW*scale, pxH=topH+rollH;
 
@@ -426,15 +427,15 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
     const svg=`<svg id="resultSvg" xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" viewBox="0 0 ${pxW} ${pxH}">
       <rect width="100%" height="100%" fill="#fff"/>
-      <text x="${rollW/2}" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="18" font-weight="700">${esc($('siteName').value.trim())}</text>
-      <text x="${rollW/2}" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="16" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
-      <line x1="20" y1="58" x2="${Math.max(20,rollW-20)}" y2="58" stroke="#444"/>
-      <g>${body}</g>
+      <text x="${svgW/2}" y="25" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="18" font-weight="700">${esc($('siteName').value.trim())}</text>
+      <text x="${svgW/2}" y="48" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif" font-size="16" font-weight="700">필름 폭 ${filmW.toLocaleString()} mm</text>
+      <line x1="${filmX+20}" y1="58" x2="${Math.max(filmX+20,filmX+rollW-20)}" y2="58" stroke="#444"/>
+      <g transform="translate(${filmX},0)">${body}</g>
 
       <g font-family="-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif">
-        <text x="${rollW+12}" y="${topH+18}" font-size="15" font-weight="700">전체 ${filmL.toLocaleString()} mm</text>
-        <text x="${rollW+12}" y="${Math.min(totalY-18, usedY+18)}" font-size="15" font-weight="700" fill="#15803d">사용 ${used.toLocaleString()} mm</text>
-        <text x="${rollW+12}" y="${Math.min(totalY-2, usedY+39)}" font-size="15" font-weight="700" fill="#d97706">남음 ${remain.toLocaleString()} mm</text>
+        <text x="${svgW-12}" y="18" text-anchor="end" font-size="14" font-weight="700">전체 ${filmL.toLocaleString()} mm</text>
+        <text x="${svgW-12}" y="38" text-anchor="end" font-size="14" font-weight="700" fill="#15803d">사용 ${used.toLocaleString()} mm</text>
+        <text x="${svgW-12}" y="58" text-anchor="end" font-size="14" font-weight="700" fill="#d97706">남음 ${remain.toLocaleString()} mm</text>
         <text x="${Math.min(rollW-8, rollW/2)}" y="${Math.max(topH+30,usedY-8)}" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">재단 끝 (${used.toLocaleString()} mm)</text>
         <text x="${Math.min(rollW-8, rollW/2)}" y="${Math.min(totalY-8, usedY+26)}" text-anchor="middle" font-size="13" font-weight="700" fill="#64748b">남은 필름 ${remain.toLocaleString()} mm</text>
         <text x="${rollW/2}" y="${totalY+22}" text-anchor="middle" font-size="13" fill="#475569">필름 끝 · ${filmW.toLocaleString()} × ${filmL.toLocaleString()} mm</text>
@@ -488,6 +489,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
     const scale=0.55;
     const topH=76;
     const rollW=filmW*scale;
+    const exportMargin=20;
     const srcW=Number(src.getAttribute('width'))||src.viewBox.baseVal.width;
     const cropH=Math.max(1,used*scale);
     const exportHeader=54;
