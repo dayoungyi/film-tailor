@@ -138,7 +138,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
 
   function collectData(){
     return {
-      version:23,
+      version:27,
       savedAt:Date.now(),
       filmW:$('filmW').value || '1220',
       filmL:$('filmL').value || '50000',
@@ -240,187 +240,226 @@ button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:1
   }
 
 
-  // 로스 최소화를 최우선으로 하면서, 같은 품목은 가능한 한 연속해서
-  // 보이도록 배치합니다. "품목 묶기"가 로스를 악화시키는 경우에는
-  // 묶음보다 필름 활용을 우선합니다.
-  // 2D 빔서치 기반 배치:
-  // - 로스(사용 길이)를 1순위로 최소화
-  // - 같은 품목 연속성은 로스가 비슷할 때만 우선
-  // - 폭이 넓은 부재를 우선 후보로 삼되, 남는 폭을 채울 수 있는
-  //   좁고 긴 부재도 중간에 적극적으로 끼워 넣음
-  // - 결 방향 모드에서는 회전 금지, 솔리드에서는 90° 회전 허용
+  // 재단 현장에서 실제로 자르기 쉬우면서도 필름 로스를 줄이는 방식입니다.
+  // 우선순위:
+  // 1) 전체 사용 길이(로스) 최소화
+  // 2) 폭 610mm 이상인 넓은 부재 우선
+  // 3) 길이 3000mm 이상인 긴 부재를 가능한 한 먼저 배치
+  // 4) 같은 치수는 하나의 그룹으로 묶어 연속 재단
+  // 단, 같은 치수를 묶느라 사용 길이가 늘어나면 로스가 더 적은 배치를 선택합니다.
+  //
+  // 핵심은 '행(shelf)' 단위입니다. 한 행 안에서는 부재를 좌우로 붙여 배치하고,
+  // 남은 폭에는 뒤의 좁은 부재를 끼워 넣습니다. 이렇게 하면 사람이 실제로
+  // 재단할 때도 한 덩어리씩 순서대로 작업할 수 있고, 2D 자유공간 방식에서 생기던
+  // 뒤죽박죽 빈 공간을 크게 줄일 수 있습니다.
   function pack(items, filmW, filmL, allowRotation=false){
-    const keyOf=i=>`${i.name}\u0000${i.w}\u0000${i.h}`;
+    const dimKey=i=>`${i.w}x${i.h}`;
+    const nameKey=i=>`${i.name}\u0000${i.w}\u0000${i.h}`;
 
-    function intersects(a,b){
-      return !(a.x>=b.x+b.w || a.x+a.w<=b.x || a.y>=b.y+b.h || a.y+a.h<=b.y);
-    }
-    function contains(a,b){
-      return a.x<=b.x && a.y<=b.y && a.x+a.w>=b.x+b.w && a.y+a.h>=b.y+b.h;
-    }
-    function prune(rects){
-      const out=[];
-      for(let i=0;i<rects.length;i++){
-        const r=rects[i]; if(r.w<=0.01||r.h<=0.01) continue;
-        let covered=false;
-        for(let j=0;j<rects.length;j++){
-          if(i!==j && contains(rects[j],r)){covered=true;break;}
-        }
-        if(!covered) out.push(r);
-      }
-      const seen=new Set();
-      return out.filter(r=>{
-        const k=`${r.x}|${r.y}|${r.w}|${r.h}`;
-        if(seen.has(k)) return false;
-        seen.add(k); return true;
-      });
-    }
-    function place(free, chosen){
-      const next=[];
-      for(const fr of free){
-        if(!intersects(chosen,fr)){next.push(fr);continue;}
-        if(chosen.x>fr.x) next.push({x:fr.x,y:fr.y,w:chosen.x-fr.x,h:fr.h});
-        if(chosen.x+chosen.w<fr.x+fr.w)
-          next.push({x:chosen.x+chosen.w,y:fr.y,w:fr.x+fr.w-(chosen.x+chosen.w),h:fr.h});
-        if(chosen.y>fr.y) next.push({x:fr.x,y:fr.y,w:fr.w,h:chosen.y-fr.y});
-        if(chosen.y+chosen.h<fr.y+fr.h)
-          next.push({x:fr.x,y:chosen.y+chosen.h,w:fr.w,h:fr.y+fr.h-(chosen.y+chosen.h)});
-      }
-      return prune(next);
-    }
-
-    const orientations=(it)=>{
-      const a=[[it.w,it.h,0]];
-      if(allowRotation && it.w!==it.h) a.push([it.h,it.w,90]);
-      return a;
+    const orientations = it => {
+      const out=[[it.w,it.h,0]];
+      if(allowRotation && it.w!==it.h) out.push([it.h,it.w,90]);
+      return out;
     };
 
-    // 한 품목을 특정 자유영역에 넣었을 때의 좋은 후보 위치를 반환합니다.
-    function placementCandidates(state,it,limit=4){
-      const out=[];
-      for(const fr of state.free){
-        for(const [pw,ph,rot] of orientations(it)){
-          if(pw>fr.w || ph>fr.h) continue;
-          const x=fr.x, y=fr.y;
-          const newMaxY=Math.max(state.maxY,y+ph);
-          const leftoverArea=fr.w*fr.h-pw*ph;
-          const splitWaste=Math.min(Math.max(0,fr.w-pw),Math.max(0,fr.h-ph));
-          // 아래/오른쪽으로 이어지는 빈 공간을 남기는 것을 약간 선호
-          const edgeFit=Math.min(fr.w-pw,fr.h-ph);
-          const same=state.prevKey!==null && keyOf(it)===state.prevKey;
-          const local=[newMaxY,leftoverArea,splitWaste,same?0:1,fr.y,fr.x];
-          out.push({x,y,w:pw,h:ph,rot,local});
-        }
-      }
-      out.sort((a,b)=>{
-        for(let i=0;i<a.local.length;i++) if(a.local[i]!==b.local[i]) return a.local[i]-b.local[i];
-        return 0;
-      });
-      return out.slice(0,limit);
-    }
-
-    // 빔서치가 한 단계에서 모든 부재를 보게 하되, 계산량을 제한하기 위해
-    // 폭/길이/면적 상위 후보 + 직전 품목을 우선적으로 탐색합니다.
-    function candidateIds(state){
-      const ids=state.remaining;
-      const prev=state.prevKey;
-      const scored=ids.map(id=>{
-        const it=items[id];
-        const same=prev && keyOf(it)===prev ? 1:0;
-        const fillable=state.free.reduce((best,fr)=>{
-          const fits=orientations(it).some(([w,h])=>w<=fr.w&&h<=fr.h);
-          if(!fits) return best;
-          return Math.max(best,Math.min(fr.w-it.w,fr.h-it.h));
-        },-1);
-        return {id,it,same,fillable};
-      });
-      scored.sort((a,b)=>{
-        if(a.same!==b.same) return b.same-a.same;
-        if(a.fillable!==b.fillable) return a.fillable-b.fillable;
-        if(a.it.w!==b.it.w) return b.it.w-a.it.w;
-        if(a.it.h!==b.it.h) return b.it.h-a.it.h;
-        return b.it.w*b.it.h-a.it.w*a.it.h;
-      });
-      // 넓은 품목과 좁고 긴 품목이 모두 후보에 들어오게 합니다.
-      const extra=[...ids].sort((a,b)=>items[b].h-items[a].h);
-      const extra2=[...ids].sort((a,b)=>items[b].w*items[b].h-items[a].w*items[a].h);
-      const picked=[];
-      for(const arr of [scored.map(x=>x.id),extra,extra2]){
-        for(const id of arr){ if(!picked.includes(id)) picked.push(id); if(picked.length>=18) break; }
-        if(picked.length>=18) break;
-      }
-      return picked;
-    }
-
-    const initial={
-      free:[{x:0,y:0,w:filmW,h:filmL}],
-      placed:[],
-      remaining:items.map((_,i)=>i),
-      maxY:0,
-      prevKey:null,
-      breaks:0,
-      area:0
+    // 요청하신 우선순위를 수치화합니다.
+    // wide(610+)를 먼저, 그 안에서는 긴 것부터, 그 다음 일반 부재.
+    const priority = it => {
+      const wide = it.w >= 610 ? 2 : 0;
+      const long = it.h >= 3000 ? 1 : 0;
+      return wide + long;
     };
 
-    // beamWidth를 넓게 잡아 '같은 품목 묶기' 때문에 좋은 배치가 사라지는 것을 방지합니다.
-    let beam=[initial];
-    const beamWidth=28;
+    // 동일 치수는 한 번에 처리할 수 있도록 그룹화합니다.
+    const groups=new Map();
+    items.forEach((it,i)=>{
+      const k=dimKey(it);
+      if(!groups.has(k)) groups.set(k,{key:k,w:it.w,h:it.h,items:[],priority:priority(it)});
+      groups.get(k).items.push(i);
+    });
 
-    for(let step=0;step<items.length;step++){
-      const next=[];
-      for(const state of beam){
-        for(const id of candidateIds(state)){
+    const groupList=[...groups.values()];
+    groupList.sort((a,b)=>{
+      if(b.priority!==a.priority) return b.priority-a.priority;
+      if(b.w!==a.w) return b.w-a.w;
+      if(b.h!==a.h) return b.h-a.h;
+      return b.w*b.h-a.w*a.h;
+    });
+
+    // 여러 순서를 시험합니다. 첫 순서는 사용자 우선순위를 가장 강하게 따르고,
+    // 다른 순서는 로스를 줄일 수 있는 대안입니다.
+    const groupOrders=[];
+    groupOrders.push(groupList);
+    groupOrders.push([...groupList].sort((a,b)=>b.w-a.w||b.h-a.h));
+    groupOrders.push([...groupList].sort((a,b)=>b.h-a.h||b.w-a.w));
+    groupOrders.push([...groupList].sort((a,b)=>b.w*b.h-a.w*a.h||b.w-a.w));
+
+    // 같은 우선순위 안에서 폭/길이 조합을 달리해 추가 탐색합니다.
+    const reversed=[...groupList].reverse();
+    groupOrders.push(reversed);
+
+    function packGroups(order, strategy){
+      const rows=[];
+      let placedCount=0;
+      let totalArea=0;
+
+      function tryPlaceInRow(row,it){
+        const opts=orientations(it);
+        let best=null;
+        for(const [pw,ph,rot] of opts){
+          if(row.usedW+pw>filmW+0.001) continue;
+          const remain=filmW-(row.usedW+pw);
+          // 남는 폭이 작을수록 좋고, 같은 경우 길이가 긴 부재를 우선.
+          const score=[remain, Math.abs(row.h-ph), -it.h, -it.w];
+          if(!best || score.some((v,j)=>v<best.score[j] || (v===best.score[j]&&false))){
+            best={pw,ph,rot,score};
+          }
+        }
+        if(!best) return false;
+        const x=row.usedW;
+        row.parts.push({...it,x,y:row.y,w:best.pw,h:best.ph,rot:best.rot});
+        row.usedW+=best.pw;
+        row.h=Math.max(row.h,best.ph);
+        row.area+=it.w*it.h;
+        totalArea+=it.w*it.h;
+        placedCount++;
+        return true;
+      }
+
+      const remainingByGroup=new Map(order.map(g=>[g.key,g.items.slice()]));
+      const groupIndex=new Map(order.map((g,i)=>[g.key,i]));
+
+      function placeOne(g,it){
+        let bestRow=-1, bestScore=null;
+        for(let r=0;r<rows.length;r++){
+          const row=rows[r];
+          for(const [pw,ph] of orientations(it)){
+            if(row.usedW+pw>filmW+0.001) continue;
+            const remain=filmW-(row.usedW+pw);
+            const same= row.parts.some(p=>dimKey(p)===dimKey(it)) ? 0 : 1;
+            const score = strategy===0
+              ? [same, remain, row.h-ph, -row.y]
+              : strategy===1
+                ? [remain, same, row.h-ph, -row.y]
+                : [row.h-ph, remain, same, -row.y];
+            if(!bestScore || score.some((v,j)=>v<bestScore[j])){
+              bestScore=score; bestRow=r;
+            }
+          }
+        }
+        if(bestRow>=0) return tryPlaceInRow(rows[bestRow],it);
+        const opts=orientations(it).filter(o=>o[0]<=filmW && o[1]<=filmL);
+        if(!opts.length) return false;
+        // 새 행의 방향은 결 방향 모드에서는 고정, 솔리드에서는 더 짧은 행 높이를 우선.
+        opts.sort((a,b)=>a[1]-b[1] || b[0]-a[0]);
+        const o=opts[0];
+        const y=rows.length ? rows[rows.length-1].y+rows[rows.length-1].h : 0;
+        if(y+o[1]>filmL+0.001) return false;
+        const row={y,usedW:0,h:o[1],parts:[],area:0};
+        rows.push(row);
+        return tryPlaceInRow(row,it);
+      }
+
+      // 각 그룹을 우선적으로 진행하되, 한 그룹의 모든 수량을 무조건 소진하지 않습니다.
+      // 현재 행에 남는 폭이 있으면 '다음 우선순위 그룹'에서 폭이 맞는 부재를 잠깐 채워
+      // 사용 길이를 줄입니다. 채운 뒤에는 원래 그룹으로 돌아가므로 같은 치수 덩어리도 유지됩니다.
+      for(let gi=0;gi<order.length;gi++){
+        const g=order[gi];
+        const ids=remainingByGroup.get(g.key);
+        while(ids.length){
+          const id=ids.shift();
           const it=items[id];
-          const pcs=placementCandidates(state,it,4);
-          for(const chosen of pcs){
-            const placedItem={...it,...chosen};
-            const newFree=place(state.free,chosen);
-            const rem=state.remaining.filter(x=>x!==id);
-            const k=keyOf(it);
-            const br=state.breaks + (state.prevKey!==null && state.prevKey!==k ? 1:0);
-            const newMaxY=Math.max(state.maxY,chosen.y+chosen.h);
-            next.push({
-              free:newFree,
-              placed:state.placed.concat(placedItem),
-              remaining:rem,
-              maxY:newMaxY,
-              prevKey:k,
-              breaks:br,
-              area:state.area+it.w*it.h
-            });
+          const beforeRows=rows.length;
+          if(!placeOne(g,it)) return null;
+
+          // 새 행이 만들어졌다면 그 행의 남는 폭을 뒤쪽 그룹으로 채웁니다.
+          // 단, 현재 그룹과 같은 치수는 먼저 최대한 연속해서 넣습니다.
+          const row=rows[rows.length-1];
+          while(row && row.usedW<filmW-0.001){
+            let bestG=null,bestIdx=-1,bestScore=null;
+            for(let gj=gi+1;gj<order.length;gj++){
+              const ng=order[gj], arr=remainingByGroup.get(ng.key);
+              if(!arr.length) continue;
+              const cand=items[arr[0]];
+              for(let k=0;k<arr.length;k++){
+                const cit=items[arr[k]];
+                for(const [pw,ph] of orientations(cit)){
+                  if(row.usedW+pw>filmW+0.001) continue;
+                  const rem=filmW-(row.usedW+pw);
+                  const longBonus=cit.h>=3000?0:1;
+                  const wideBonus=cit.w>=610?0:1;
+                  const score=[rem, longBonus, wideBonus, -cit.h, -cit.w, gj];
+                  if(!bestScore || score.some((v,j)=>v<bestScore[j])){
+                    bestScore=score; bestG=ng; bestIdx=k;
+                  }
+                }
+              }
+            }
+            if(!bestG) break;
+            const nid=remainingByGroup.get(bestG.key).splice(bestIdx,1)[0];
+            if(!tryPlaceInRow(row,items[nid])) break;
           }
         }
       }
-      if(!next.length) return null;
 
-      // 길이를 가장 강하게 줄이되, 같은 길이에서는 자유공간 파편화를 줄이고
-      // 같은 품목의 연속성을 보조적으로 고려합니다.
-      next.sort((a,b)=>{
-        const aFree=a.free.reduce((s,r)=>s+r.w*r.h,0);
-        const bFree=b.free.reduce((s,r)=>s+r.w*r.h,0);
-        const aSmall=a.free.reduce((s,r)=>s+Math.min(r.w,r.h),0);
-        const bSmall=b.free.reduce((s,r)=>s+Math.min(r.w,r.h),0);
-        const av=a.maxY*1000000 + (filmW*filmL-aFree)*0.01 + aSmall*0.001 + a.breaks*0.1;
-        const bv=b.maxY*1000000 + (filmW*filmL-bFree)*0.01 + bSmall*0.001 + b.breaks*0.1;
-        return av-bv;
-      });
-      beam=next.slice(0,beamWidth);
+      // 위에서 일부를 앞당겨 사용했더라도 남은 그룹을 끝까지 배치합니다.
+      for(const g of order){
+        const ids=remainingByGroup.get(g.key);
+        while(ids && ids.length){
+          if(!placeOne(g,items[ids.shift()])) return null;
+        }
+      }
+
+      // 앞쪽 행의 높이가 뒤늦게 커질 수 있으므로 최종적으로 행을 다시 이어 붙입니다.
+      let yy=0;
+      for(const row of rows){
+        row.y=yy;
+        for(const part of row.parts) part.y=yy;
+        yy+=row.h;
+      }
+      return {rows,placedCount,totalArea,maxY:yy};
     }
 
+    // 행 방식만 쓰면 특정 조합에서 손해를 볼 수 있으므로 여러 순서/전략을
+    // 비교하고, 사용 길이를 최우선으로 선택합니다.
     let best=null;
-    for(const state of beam){
-      if(state.maxY>filmL) continue;
-      const used=state.maxY;
-      const area=state.area;
-      const wasteArea=Math.max(0,used*filmW-area);
-      // 로스가 절대적인 1순위. 차이가 100mm 이내일 때만 품목 연속성을 고려합니다.
-      if(!best || used<best.maxY-100 ||
-        (Math.abs(used-best.maxY)<=100 && (wasteArea<best.wasteArea-1 ||
-         (Math.abs(wasteArea-best.wasteArea)<=1 && state.breaks<best.breaks)))){
-        best={placed:state.placed,maxY:used,area,wasteArea,breaks:state.breaks};
+    for(const order of groupOrders){
+      for(let strategy=0;strategy<3;strategy++){
+        const r=packGroups(order,strategy);
+        if(!r || r.placedCount!==items.length) continue;
+        const wasteArea=r.maxY*filmW-r.totalArea;
+        const groupBreaks=r.rows.reduce((sum,row)=>{
+          let prev=null, n=0;
+          for(const p of row.parts){const k=dimKey(p); if(prev!==null&&prev!==k)n++; prev=k;}
+          return sum+n;
+        },0);
+        const score={
+          length:r.maxY,
+          waste:wasteArea,
+          breaks:groupBreaks,
+          rows:r.rows.length
+        };
+        // 길이 1순위, 면적 로스 2순위, 같은 치수 연속성 3순위.
+        if(!best || score.length<best.score.length-0.001 ||
+          (Math.abs(score.length-best.score.length)<=0.001 &&
+           (score.waste<best.score.waste-1 ||
+            (Math.abs(score.waste-best.score.waste)<=1 && score.breaks<best.score.breaks)))){
+          best={rows:r.rows,score,area:r.totalArea};
+        }
       }
     }
-    return best;
+    if(!best) return null;
+
+    // 행 결과를 기존 SVG 렌더러 형식으로 변환합니다.
+    const placed=[];
+    best.rows.forEach(row=>row.parts.forEach(p=>placed.push(p)));
+    return {
+      placed,
+      maxY:best.score.length,
+      area:best.area,
+      wasteArea:best.score.waste,
+      breaks:best.score.breaks
+    };
   }
 
   function sizeText(text, maxW, base, min){
